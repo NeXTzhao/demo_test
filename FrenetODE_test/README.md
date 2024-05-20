@@ -1,2 +1,3 @@
-# demo_test
-一些日常测试写的demo
+测试Frenet坐标系下的动力学方程推演出来的轨迹误差。
+从结果上来看误差很小，可以作为一个ode来建立优化问题
+![test.png](test.png)
