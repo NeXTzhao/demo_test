@@ -27,7 +27,7 @@ void compare_inversion_methods(const std::vector<double> &dimensions) {
   std::vector<double> direct_residuals, lu_residuals, cholesky_residuals, qr_residuals, svd_residuals;
   const double initial_epsilon = 1e-6;  // 初始修正参数
 
-  for (int dim : dimensions) {
+  for (const auto dim : dimensions) {
     // 生成随机矩阵
     Eigen::MatrixXd A = Eigen::MatrixXd::Random(dim, dim);
     Eigen::MatrixXd A_inv;

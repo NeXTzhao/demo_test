@@ -1,5 +1,5 @@
 # Generated from CLion C/C++ Code Style settings
-BasedOnStyle: LLVM
+BasedOnStyle: Google
 AccessModifierOffset: -1
 AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: None
