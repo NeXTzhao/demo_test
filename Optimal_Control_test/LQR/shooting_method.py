@@ -39,7 +39,7 @@ def backward_pass(x, u, h, N, Q, R, Qn):
 
 
 # 牛顿法优化
-def optimize_control_newton(x0, xd, h, N, Q, R, Qn, max_iter=50, tol=1e-3, line_search_tol=1e-2):
+def optimize_control_newton(x0, xd, h, N, Q, R, Qn, max_iter=100, tol=1e-3, line_search_tol=1e-2):
     u = np.zeros(N)  # 初始猜测
     x = rollout(x0, u, h, N)  # 初始状态轨迹
     for _ in range(max_iter):
@@ -63,14 +63,17 @@ def optimize_control_newton(x0, xd, h, N, Q, R, Qn, max_iter=50, tol=1e-3, line_
     return u, x
 
 
-# 示例参数
+# 参数
+n = 2
+m = 1
 h = 0.1
-N = 50
-x0 = np.array([1, 0])
+Tfinal = 10.0
+N = int(Tfinal / h + 1)
+x0 = np.array([10.0, -100])
 xd = np.array([0, 0])
-Q = np.eye(2)
-R = np.eye(1)
-Qn = np.eye(2)
+Q = np.eye(n) * 10
+R = np.eye(m) * 0.1
+Qn = np.eye(n) * 10
 
 # 求解最优控制输入
 u_opt, x_opt = optimize_control_newton(x0, xd, h, N, Q, R, Qn)
@@ -103,6 +106,5 @@ plt.legend()
 plt.grid(True)
 
 plt.tight_layout()
-# plt.show()
-plt.savefig('result.png')
-
+plt.show()
+# plt.savefig('result.png')
