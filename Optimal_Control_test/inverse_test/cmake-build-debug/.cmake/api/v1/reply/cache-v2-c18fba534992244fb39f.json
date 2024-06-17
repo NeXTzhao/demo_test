@@ -171,7 +171,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc-ar-11"
+			"value" : "/usr/bin/gcc-ar-9"
 		},
 		{
 			"name" : "CMAKE_CXX_COMPILER_RANLIB",
@@ -187,7 +187,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc-ranlib-11"
+			"value" : "/usr/bin/gcc-ranlib-9"
 		},
 		{
 			"name" : "CMAKE_CXX_FLAGS",
@@ -299,7 +299,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc-ar-11"
+			"value" : "/usr/bin/gcc-ar-9"
 		},
 		{
 			"name" : "CMAKE_C_COMPILER_RANLIB",
@@ -315,7 +315,7 @@
 				}
 			],
 			"type" : "FILEPATH",
-			"value" : "/usr/bin/gcc-ranlib-11"
+			"value" : "/usr/bin/gcc-ranlib-9"
 		},
 		{
 			"name" : "CMAKE_C_FLAGS",
@@ -1151,7 +1151,7 @@
 				}
 			],
 			"type" : "PATH",
-			"value" : "/usr/share/eigen3/cmake"
+			"value" : "/usr/lib/cmake/eigen3"
 		},
 		{
 			"name" : "FIND_PACKAGE_MESSAGE_DETAILS_Python3",
@@ -1163,7 +1163,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "[/usr/bin/python3.10][/usr/include/python3.10][/usr/lib/x86_64-linux-gnu/libpython3.10.so][/home/next/.local/lib/python3.10/site-packages/numpy/core/include][cfound components: Interpreter Development NumPy Development.Module Development.Embed ][v3.10.12()]"
+			"value" : "[/usr/bin/python3.8][/usr/include/python3.8][/usr/lib/x86_64-linux-gnu/libpython3.8.so][/home/next/.local/lib/python3.8/site-packages/numpy/core/include][cfound components: Interpreter Development NumPy Development.Module Development.Embed ][v3.8.10()]"
 		},
 		{
 			"name" : "_CMAKE_LINKER_PUSHPOP_STATE_SUPPORTED",
@@ -1199,7 +1199,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "625d9e0f7a1af1ddb80bfa11fbea90e0"
+			"value" : "0a1c5fc8719f4e4a44cf594e6aedd419"
 		},
 		{
 			"name" : "_Python3_DEVELOPMENT_MODULE_SIGNATURE",
@@ -1211,7 +1211,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "4bc14a0ea6a21ea267e38aa660e9b54b"
+			"value" : "5c4d899b694456d2130e67e0e2e103ee"
 		},
 		{
 			"name" : "_Python3_Development_REASON_FAILURE",
@@ -1235,7 +1235,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/usr/bin/python3.10"
+			"value" : "/usr/bin/python3.8"
 		},
 		{
 			"name" : "_Python3_INCLUDE_DIR",
@@ -1247,7 +1247,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/usr/include/python3.10"
+			"value" : "/usr/include/python3.8"
 		},
 		{
 			"name" : "_Python3_INTERPRETER_PROPERTIES",
@@ -1259,7 +1259,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "Python;3;10;12;64;;cpython-310-x86_64-linux-gnu;abi3;/usr/lib/python3.10;/usr/lib/python3.10;/usr/local/lib/python3.10/dist-packages;/usr/local/lib/python3.10/dist-packages"
+			"value" : "Python;3;8;10;64;;cpython-38-x86_64-linux-gnu;abi3;/usr/lib/python3.8;/usr/lib/python3.8;/usr/lib/python3/dist-packages;/usr/lib/python3/dist-packages"
 		},
 		{
 			"name" : "_Python3_INTERPRETER_SIGNATURE",
@@ -1271,7 +1271,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "b91b4035ecb3bb3f5760d35922531bcd"
+			"value" : "1d67f3455c450d8c2e1e4f08924f9fd7"
 		},
 		{
 			"name" : "_Python3_LIBRARY_RELEASE",
@@ -1283,7 +1283,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/usr/lib/x86_64-linux-gnu/libpython3.10.so"
+			"value" : "/usr/lib/x86_64-linux-gnu/libpython3.8.so"
 		},
 		{
 			"name" : "_Python3_NUMPY_SIGNATURE",
@@ -1295,7 +1295,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "03637bbc493fe88903739a5129f0293e"
+			"value" : "9ffb24d31e6a98f62bf3375bcb477edf"
 		},
 		{
 			"name" : "_Python3_NumPy_INCLUDE_DIR",
@@ -1307,7 +1307,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "/home/next/.local/lib/python3.10/site-packages/numpy/core/include"
+			"value" : "/home/next/.local/lib/python3.8/site-packages/numpy/core/include"
 		},
 		{
 			"name" : "test_BINARY_DIR",
