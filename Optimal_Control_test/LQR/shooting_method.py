@@ -67,38 +67,35 @@ def optimize_control_newton(x0, xd, h, N, Q, R, Qn, max_iter=100, tol=1e-3, line
 n = 2
 m = 1
 h = 0.1
-Tfinal = 10.0
+Tfinal = 5
 N = int(Tfinal / h + 1)
-x0 = np.array([10.0, -100])
+x0 = np.array([10.0, -50])
 xd = np.array([0, 0])
 Q = np.eye(n) * 10
-R = np.eye(m) * 0.1
+R = np.eye(m) * 1
 Qn = np.eye(n) * 10
 
 # 求解最优控制输入
 u_opt, x_opt = optimize_control_newton(x0, xd, h, N, Q, R, Qn)
-
-u_initial = np.zeros(N)  # 初始猜测
 
 t = np.linspace(0, N * h, N)
 
 plt.figure(figsize=(12, 6))
 
 # 控制输入对比图
-plt.subplot(1, 2, 1)
-plt.plot(t, u_initial, label='Initial Control Input (u_initial)', linestyle='--', color='gray')
-plt.plot(t, u_opt, label='Optimized Control Input (u_opt)', color='b')
+plt.subplot(2, 1, 1)
+plt.plot(t, u_opt, label='Optimized Control Input (u_opt)', color='b', marker='o')
 plt.xlabel('Time (s)')
 plt.ylabel('Control Input (u)')
-plt.title('Initial vs Optimized Control Input')
+plt.title('Shooting Method')
 plt.legend()
 plt.grid(True)
 
 # 状态轨迹图
-plt.subplot(1, 2, 2)
+plt.subplot(2, 1, 2)
 t_full = np.linspace(0, N * h, N + 1)
-plt.plot(t_full, x_opt[0, :], label='Position (q)', color='r')
-plt.plot(t_full, x_opt[1, :], label='Velocity (dq)', color='g')
+plt.plot(t_full, x_opt[0, :], label='Position (q)', color='r', marker='o')
+plt.plot(t_full, x_opt[1, :], label='Velocity (dq)', color='g', marker='o')
 plt.xlabel('Time (s)')
 plt.ylabel('State')
 plt.title('State Trajectories')
