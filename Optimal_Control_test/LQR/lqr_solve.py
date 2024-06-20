@@ -131,7 +131,7 @@ def finite_time_domain_riccati_method():
         K_i = np.linalg.inv(R + B.T @ P_i @ B) @ (B.T @ P_i @ A)
         P[i] = Q + A.T @ P_i @ (A - B @ K_i)
         K[i] = K_i
-        print(f'k = {K_i}')
+        # print(f'k = {K_i}')
 
     x = np.zeros((n, N))
     u = np.zeros((m, N - 1))
@@ -246,6 +246,7 @@ plt.title('Velocity Trajectory Comparison')
 plt.legend(fontsize=12)
 plt.grid(True)
 plt.tight_layout()
+# plt.savefig('result.png')
 
 # 运行多次以获取时间分布
 qp_times = []
@@ -292,3 +293,4 @@ for i, method_times in enumerate([qp_times, shooting_times, riccati_finite_times
 
 plt.tight_layout()
 plt.show()
+# plt.savefig('time.png')
