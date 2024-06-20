@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+message Student {
+  optional int32 id = 1;
+  optional string name = 2;
+}
+
+message Class {
+  optional int32 id = 1;
+  repeated Student student = 2;
+}
+
+message School {
+  optional Class class_s = 1;
+}
