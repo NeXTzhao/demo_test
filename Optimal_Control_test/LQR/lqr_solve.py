@@ -254,7 +254,7 @@ shooting_times = []
 riccati_finite_times = []
 riccati_infinite_times = []
 
-for _ in range(100):
+for _ in range(10):
     start_time = time.time()
     u_qp, x_qp = qp_method()
     qp_times.append(time.time() - start_time)
