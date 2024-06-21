@@ -2,6 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import block_diag
 import time
+import time
+import cProfile
+import pstats
+import io
 
 # 系统参数
 h = 0.1
@@ -183,11 +187,59 @@ def infinite_horizon_riccati_method(tolerance=1e-9, max_iterations=1000):
     return u, x
 
 
+# 动态规划求解LQR
+def dynamic_programming_method():
+    P = [None] * N
+    K = [None] * (N - 1)
+
+    P[-1] = Qn
+
+    # 反向递推计算P和K矩阵
+    for k in range(N - 2, -1, -1):
+        K_k = np.linalg.inv(R + B.T @ P[k + 1] @ B) @ (B.T @ P[k + 1] @ A)
+        P_k = Q + K_k.T @ R @ K_k + (A - B @ K_k).T @ P[k + 1] @ (A - B @ K_k)
+        K[k] = K_k
+        P[k] = P_k
+
+    x = np.zeros((n, N))
+    u = np.zeros((m, N - 1))
+    x[:, 0] = x0
+
+    # 正向递推计算状态轨迹和控制输入序列
+    for k in range(N - 1):
+        u[:, k] = -K[k] @ x[:, k]  # 计算当前步的控制输入
+        x[:, k + 1] = A @ x[:, k] + B @ u[:, k]  # 计算下一步的状态
+
+    return u, x
+
+
+# 性能分析函数
+def profile_function(func):
+    pr = cProfile.Profile()
+    pr.enable()
+    result = func()
+    pr.disable()
+    s = io.StringIO()
+    sortby = 'cumulative'
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    print(s.getvalue())
+    return result
+
+
+# 对各个方法方法进行性能分析
+profile_function(qp_method)
+profile_function(shooting_method)
+profile_function(finite_time_domain_riccati_method)
+profile_function(infinite_horizon_riccati_method)
+profile_function(dynamic_programming_method)
+
 # 运行各个方法
 u_qp, x_qp = qp_method()
 u_shooting, x_shooting = shooting_method()
 u_riccati_finite, x_riccati_finite = finite_time_domain_riccati_method()
 u_riccati_infinite, x_riccati_infinite = infinite_horizon_riccati_method()
+u_dp, x_dp = dynamic_programming_method()
 
 # 可视化结果对比
 t = np.linspace(0, (N - 1) * 0.1, N - 1)
@@ -204,6 +256,8 @@ plt.plot(t, u_riccati_finite.T, label='Finite Horizon Riccati Method', color='gr
          linewidth=2, markersize=6)
 plt.plot(t, u_riccati_infinite.T, label='Infinite Horizon Riccati Method', color='red', marker='x', linestyle='-',
          linewidth=2, markersize=6)
+plt.plot(t, u_dp.T, label='Dynamic Programming Method', color='purple', marker='d', linestyle='-', linewidth=2,
+         markersize=6)
 plt.xlabel('Time (s)')
 plt.ylabel('Control Input (u)')
 plt.title('Control Input Comparison')
@@ -221,6 +275,8 @@ plt.plot(t_full, x_riccati_finite[0, :], label='Finite Horizon Riccati Method Po
          linewidth=2, markersize=6)
 plt.plot(t_full, x_riccati_infinite[0, :], label='Infinite Horizon Riccati Method Position (q)', color='blue',
          marker='x', linestyle='-',
+         linewidth=2, markersize=6)
+plt.plot(t_full, x_dp[0, :], label='Dynamic Programming Method Position (q)', color='orange', marker='d', linestyle='-',
          linewidth=2, markersize=6)
 plt.xlabel('Time (s)')
 plt.ylabel('Position (q)')
@@ -240,27 +296,29 @@ plt.plot(t_full, x_riccati_finite[1, :], label='Finite Horizon Riccati Method Ve
 plt.plot(t_full, x_riccati_infinite[1, :], label='Infinite Horizon Riccati Method Velocity (dq)', color='black',
          marker='x', linestyle='-',
          linewidth=2, markersize=6)
+plt.plot(t_full, x_dp[1, :], label='Dynamic Programming Method Velocity (dq)', color='orange', marker='d',
+         linestyle='-', linewidth=2, markersize=6)
 plt.xlabel('Time (s)')
 plt.ylabel('Velocity (dq)')
 plt.title('Velocity Trajectory Comparison')
 plt.legend(fontsize=12)
 plt.grid(True)
 plt.tight_layout()
-# plt.savefig('result.png')
 
 # 运行多次以获取时间分布
 qp_times = []
 shooting_times = []
 riccati_finite_times = []
 riccati_infinite_times = []
+dp_times = []
 
 for _ in range(10):
     start_time = time.time()
-    u_qp, x_qp = qp_method()
+    # u_qp, x_qp = qp_method()
     qp_times.append(time.time() - start_time)
 
     start_time = time.time()
-    u_shooting, x_shooting = shooting_method()
+    # u_shooting, x_shooting = shooting_method()
     shooting_times.append(time.time() - start_time)
 
     start_time = time.time()
@@ -271,10 +329,14 @@ for _ in range(10):
     u_riccati_infinite, x_riccati_infinite = infinite_horizon_riccati_method()
     riccati_infinite_times.append(time.time() - start_time)
 
+    start_time = time.time()
+    u_dp, x_dp = dynamic_programming_method()
+    dp_times.append(time.time() - start_time)
+
 plt.figure(figsize=(10, 6))
-colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
-plt.boxplot([shooting_times, qp_times, riccati_finite_times, riccati_infinite_times],
-            labels=['Shooting Method', 'QP Method', 'Finite Riccati Method', 'Infinite Riccati Method'],
+colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+plt.boxplot([shooting_times, qp_times, riccati_finite_times, riccati_infinite_times, dp_times],
+            labels=['Shooting Method', 'QP Method', 'Finite Riccati Method', 'Infinite Riccati Method', 'DP Method'],
             patch_artist=True,
             boxprops=dict(facecolor=colors[0], color=colors[0]),
             whiskerprops=dict(color=colors[0]),
@@ -287,7 +349,7 @@ plt.title('Method Time Comparison', fontsize=16)
 plt.grid(True)
 
 # 添加数据点
-for i, method_times in enumerate([qp_times, shooting_times, riccati_finite_times, riccati_infinite_times]):
+for i, method_times in enumerate([shooting_times, qp_times, riccati_finite_times, riccati_infinite_times, dp_times]):
     x = np.random.normal(i + 1, 0.04, size=len(method_times))
     plt.plot(x, method_times, 'r.', alpha=0.8)
 
