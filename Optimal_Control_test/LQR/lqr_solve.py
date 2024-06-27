@@ -27,51 +27,6 @@ noise_mean = 0
 noise_std_dev = 0.1
 
 
-# QP方法
-def qp_method():
-    # 构建权重矩阵 H
-    H = block_diag(R, *[block_diag(Q, R) for _ in range(N - 2)], Qn)
-
-    # 构建Kronecker积部分
-    I_N_minus_1 = np.eye(N - 1)
-    block_B_I = np.hstack([B, -np.eye(n)])
-    C = np.kron(I_N_minus_1, block_B_I)
-
-    # 将A填入C的特定位置
-    for k in range(1, N - 1):
-        C[k * n:(k + 1) * n, (k * (n + m) - n):(k * (n + m))] = A
-
-    # 构建向量d
-    d = np.concatenate([-A @ x0, np.zeros(C.shape[0] - n)])
-
-    # 构建KKT矩阵
-    KKT_matrix = np.block([[H, C.T], [C, np.zeros((C.shape[0], C.shape[0]))]])
-
-    # 构建KKT右端项
-    KKT_rhs = np.concatenate([np.zeros(H.shape[0]), d])
-
-    # 求解KKT系统
-    solution = np.linalg.solve(KKT_matrix, KKT_rhs)
-
-    # 初始化提取的控制输入和状态变量列表
-    u = []
-    x = []
-
-    # 遍历 solution，交替提取 u 和 x
-    for i in range(N - 1):
-        u.append(solution[i * (n + m):(i * (n + m) + m)])
-        x.append(solution[(i * (n + m) + m):(i + 1) * (n + m)])
-
-    # 转换为 numpy 数组并调整形状
-    u = np.array(u).reshape(N - 1, m)
-    x = np.array(x).reshape(N - 1, n)
-
-    # 还原初始状态
-    x = np.vstack([x0, x])
-
-    return u, x
-
-
 # Shooting Method
 def shooting_method(max_iter=100, tol=1e-3, line_search_tol=1e-2):
     # 仿真系统函数
@@ -117,6 +72,51 @@ def shooting_method(max_iter=100, tol=1e-3, line_search_tol=1e-2):
         x = x_new
         if np.max(np.abs(Δu)) < tol:
             break
+
+    return u, x
+
+
+# QP方法
+def qp_method():
+    # 构建权重矩阵 H
+    H = block_diag(R, *[block_diag(Q, R) for _ in range(N - 2)], Qn)
+
+    # 构建Kronecker积部分
+    I_N_minus_1 = np.eye(N - 1)
+    block_B_I = np.hstack([B, -np.eye(n)])
+    C = np.kron(I_N_minus_1, block_B_I)
+
+    # 将A填入C的特定位置
+    for k in range(1, N - 1):
+        C[k * n:(k + 1) * n, (k * (n + m) - n):(k * (n + m))] = A
+
+    # 构建向量d
+    d = np.concatenate([-A @ x0, np.zeros(C.shape[0] - n)])
+
+    # 构建KKT矩阵
+    KKT_matrix = np.block([[H, C.T], [C, np.zeros((C.shape[0], C.shape[0]))]])
+
+    # 构建KKT右端项
+    KKT_rhs = np.concatenate([np.zeros(H.shape[0]), d])
+
+    # 求解KKT系统
+    solution = np.linalg.solve(KKT_matrix, KKT_rhs)
+
+    # 初始化提取的控制输入和状态变量列表
+    u = []
+    x = []
+
+    # 遍历 solution，交替提取 u 和 x
+    for i in range(N - 1):
+        u.append(solution[i * (n + m):(i * (n + m) + m)])
+        x.append(solution[(i * (n + m) + m):(i + 1) * (n + m)])
+
+    # 转换为 numpy 数组并调整形状
+    u = np.array(u).reshape(N - 1, m)
+    x = np.array(x).reshape(N - 1, n)
+
+    # 还原初始状态
+    x = np.vstack([x0, x])
 
     return u, x
 
@@ -314,11 +314,11 @@ dp_times = []
 
 for _ in range(10):
     start_time = time.time()
-    # u_qp, x_qp = qp_method()
+    u_qp, x_qp = qp_method()
     qp_times.append(time.time() - start_time)
 
     start_time = time.time()
-    # u_shooting, x_shooting = shooting_method()
+    u_shooting, x_shooting = shooting_method()
     shooting_times.append(time.time() - start_time)
 
     start_time = time.time()
@@ -335,13 +335,35 @@ for _ in range(10):
 
 plt.figure(figsize=(10, 6))
 colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
-plt.boxplot([shooting_times, qp_times, riccati_finite_times, riccati_infinite_times, dp_times],
-            labels=['Shooting Method', 'QP Method', 'Finite Riccati Method', 'Infinite Riccati Method', 'DP Method'],
+plt.boxplot([shooting_times],
+            labels=['Shooting Method'],
             patch_artist=True,
             boxprops=dict(facecolor=colors[0], color=colors[0]),
             whiskerprops=dict(color=colors[0]),
             capprops=dict(color=colors[0]),
             medianprops=dict(color='black'))
+plt.xlabel('Methods', fontsize=14)
+plt.ylabel('Time (seconds)', fontsize=14)
+plt.title('Method Time Comparison', fontsize=16)
+plt.grid(True)
+
+# 添加数据点
+for i, method_times in enumerate([shooting_times]):
+    x = np.random.normal(i + 1, 0.04, size=len(method_times))
+    plt.plot(x, method_times, 'r.', alpha=0.8)
+
+plt.tight_layout()
+
+plt.figure(figsize=(10, 6))
+colors = ['#2ca02c', '#d62728', '#9467bd']
+plt.boxplot([qp_times, riccati_finite_times, riccati_infinite_times, dp_times],
+            labels=['QP Method', 'Finite Riccati Method', 'Infinite Riccati Method', 'DP Method'],
+            patch_artist=True,
+            boxprops=dict(facecolor=colors[0], color=colors[0]),
+            whiskerprops=dict(color=colors[0]),
+            capprops=dict(color=colors[0]),
+            medianprops=dict(color='black'))
+
 
 plt.xlabel('Methods', fontsize=14)
 plt.ylabel('Time (seconds)', fontsize=14)
@@ -349,7 +371,7 @@ plt.title('Method Time Comparison', fontsize=16)
 plt.grid(True)
 
 # 添加数据点
-for i, method_times in enumerate([shooting_times, qp_times, riccati_finite_times, riccati_infinite_times, dp_times]):
+for i, method_times in enumerate([qp_times, riccati_finite_times, riccati_infinite_times, dp_times]):
     x = np.random.normal(i + 1, 0.04, size=len(method_times))
     plt.plot(x, method_times, 'r.', alpha=0.8)
 
