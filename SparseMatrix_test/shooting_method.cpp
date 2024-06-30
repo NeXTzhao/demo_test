@@ -102,7 +102,7 @@ struct ShootingMethodConfig {
   double tol;
   double line_search_tol;
 
-  explicit ShootingMethodConfig(double dt, int max_iter = 50, double tol = 1e-2, double line_search_tol = 1e-2)
+  explicit ShootingMethodConfig(double dt, int max_iter = 100, double tol = 1e-2, double line_search_tol = 1e-2)
       : dt(dt), max_iter(max_iter), tol(tol), line_search_tol(line_search_tol) {}
 };
 
@@ -150,7 +150,7 @@ class ShootingMethod {
                   << ", delta = " << delta_u[k](Vehicle<StateDim, ControlDim>::DELTA) << std::endl;
       }
 
-      double alpha = 0.8;
+      double alpha = 1.0;
       while (true) {
         std::vector<Control> u_new = controls;
         for (size_t k = 0; k < u_new.size(); ++k) {
@@ -174,7 +174,7 @@ class ShootingMethod {
         }
         alpha *= 0.5;
 
-        if (alpha < 1e-6) {
+        if (alpha < 1e-8) {
           std::cout << "Line search failed to find a valid step size" << std::endl;
           break;
         }
@@ -264,24 +264,24 @@ int main() {
   // 定义目标轨迹
   Eigen::MatrixXd targetTrajectory(StateDim, 10);
   for (int i = 0; i < 10; ++i) {
-    targetTrajectory(Vehicle<StateDim, ControlDim>::X, i) = i * 0.2;
-    targetTrajectory(Vehicle<StateDim, ControlDim>::Y, i) = i * 0.2;
+    targetTrajectory(Vehicle<StateDim, ControlDim>::X, i) = i * 1.0;
+    targetTrajectory(Vehicle<StateDim, ControlDim>::Y, i) = i * 1.0;
     targetTrajectory(Vehicle<StateDim, ControlDim>::THETA, i) = 0;
     targetTrajectory(Vehicle<StateDim, ControlDim>::V, i) = 1;
   }
 
   Vehicle<StateDim, ControlDim>::State initialState;
-  initialState << 0, 0, 0, 0;
+  initialState << 0, 0, 0, 1;
   double dt = 0.2;
 
   ShootingMethodConfig<StateDim, ControlDim> config(dt);
 
   Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(StateDim, StateDim);
   Q(0, 0) = 10;
-  Q(1, 1) = 1;
+  Q(1, 1) = 10;
   Eigen::MatrixXd R = Eigen::MatrixXd::Identity(ControlDim, ControlDim);
-  R(0, 0) = 10;
-  R(1, 1) = 100;
+//  R(0, 0) = 10;
+  R(1, 1) = 1;
   Eigen::MatrixXd Qn = Eigen::MatrixXd::Identity(StateDim, StateDim);
 
   std::vector<Vehicle<StateDim, ControlDim>::Control> controls(
