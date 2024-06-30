@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import block_diag
 import time
-import time
 import cProfile
 import pstats
 import io
@@ -363,7 +362,6 @@ plt.boxplot([qp_times, riccati_finite_times, riccati_infinite_times, dp_times],
             whiskerprops=dict(color=colors[0]),
             capprops=dict(color=colors[0]),
             medianprops=dict(color='black'))
-
 
 plt.xlabel('Methods', fontsize=14)
 plt.ylabel('Time (seconds)', fontsize=14)

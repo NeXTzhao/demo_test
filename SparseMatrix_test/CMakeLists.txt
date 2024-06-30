@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.10)
 project(SparseVsDenseQP)
 
 # 设置C++标准
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
@@ -18,6 +18,12 @@ target_link_libraries(sparse_matrix
 
 add_executable(solveDARE solveDARE.cpp)
 target_link_libraries(solveDARE
+        Python3::Python
+        Python3::NumPy
+        Eigen3::Eigen)
+
+add_executable(shooting_method shooting_method.cpp)
+target_link_libraries(shooting_method
         Python3::Python
         Python3::NumPy
         Eigen3::Eigen)
