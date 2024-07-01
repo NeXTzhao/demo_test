@@ -222,9 +222,9 @@ void analyzeMatrixDensity(const Eigen::MatrixXd &A,
 int main() {
   double wheelbase = 2.0;  // 车辆轴距
   Vehicle vehicle(wheelbase);
-  double times = 6;
+  double times = 6.0;
   double dt = 0.2;
-  double steps = times / dt + 1.0;
+  int steps = times / dt + 1;
 
   // 初始状态
   Vehicle::State initialState = {0.0, 0.0, 1.5, 0.0};
