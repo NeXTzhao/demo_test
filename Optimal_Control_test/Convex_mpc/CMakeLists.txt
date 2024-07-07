@@ -12,14 +12,25 @@ if (NOT DEFINED PLANNING_DEBUG)
 endif ()
 add_definitions(-DPLANNING_DEBUG=${PLANNING_DEBUG})
 
+#include_directories(third_party)
+list(APPEND CMAKE_PREFIX_PATH
+        "third_party/proxsuite"
+        "third_party/eigen"
+        "third_party/fmt"
+)
+
 
 find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(glog REQUIRED)
+find_package(fmt REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(proxsuite REQUIRED)
 
 add_executable(convex_mpc convex_mpc.cpp)
 target_link_libraries(convex_mpc
+        proxsuite::proxsuite
         Python3::Python
         Python3::NumPy
         Eigen3::Eigen
-        glog::glog)
+        fmt::fmt
+        spdlog::spdlog)
