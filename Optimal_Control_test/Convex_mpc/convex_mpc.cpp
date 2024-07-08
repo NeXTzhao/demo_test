@@ -133,8 +133,8 @@ class MPC {
   std::vector<Control> solve(const State &initial_state,
                              const std::vector<State> &reference_trajectory) {
     // 初始化优化变量
-    std::vector<State> state(horizon_ , State::Zero());
-    std::vector<Control> control(horizon_-1, Control::Zero());
+    std::vector<State> state(horizon_, State::Zero());
+    std::vector<Control> control(horizon_ - 1, Control::Zero());
 
     // 初始化状态
     state[0] = initial_state;
@@ -144,6 +144,7 @@ class MPC {
     const int num_in_constraints = (StateDim + ControlDim) * (horizon_ - 1);
 
     Eigen::MatrixXd H;
+    Eigen::MatrixXd g;
     Eigen::MatrixXd A_t(StateDim, StateDim);
     Eigen::MatrixXd B_t(StateDim, ControlDim);
     vehicle_.linearize(initial_state, control[0], dt_, A_t, B_t);
@@ -154,12 +155,13 @@ class MPC {
     Eigen::VectorXd l;
     Eigen::VectorXd u;
 
-    SetCostFunction(H, reference_trajectory);
+    SetCostFunction(H, g, reference_trajectory);
     SetEqualityConstraints(A, b, A_t, B_t, initial_state);
     SetInequalityConstraints(C, l, u);
 
     AINFO << "H dimensions: (" << C.rows() << ", " << C.cols() << ")";
     AINFO << "A dimensions: (" << A.rows() << ", " << A.cols() << ")";
+    AINFO << "g dimensions: (" << g.rows() << ", " << g.cols() << ")";
     AINFO << "b dimensions: (" << b.rows() << ", " << b.cols() << ")";
     AINFO << "A_t dimensions: (" << A_t.rows() << ", " << A_t.cols() << ")";
     AINFO << "B_t dimensions: (" << B_t.rows() << ", " << B_t.cols() << ")";
@@ -170,9 +172,8 @@ class MPC {
     AINFO << "Initializing and solving QP problem";
     dense::QP<double> qp_solver(num_vars, num_eq_constraints,
                                 num_in_constraints);
-    qp_solver.init(H, Eigen::VectorXd::Zero(num_vars), A, b, C, l, u);
+    qp_solver.init(H, g.transpose(), A, b, C, l, u);
     qp_solver.solve();
-
     Eigen::VectorXd solution = qp_solver.results.x;
 
     // 初始化提取的控制输入和状态变量列表
@@ -218,7 +219,8 @@ class MPC {
       Eigen::MatrixXd Q =
           Eigen::MatrixXd::Identity(StateDim, StateDim);  // 状态代价矩阵
       Eigen::MatrixXd R =
-          Eigen::MatrixXd::Identity(ControlDim, ControlDim);  //
+          Eigen::MatrixXd::Identity(ControlDim, ControlDim);
+          //
     控制输入代价矩阵 Eigen::MatrixXd Q_N = Eigen::MatrixXd::Identity(StateDim,
     StateDim);  // 终端状态代价矩阵
 
@@ -250,36 +252,58 @@ class MPC {
       ADEBUG << "Cost function matrix H:\n" << H;
     }
     */
-  void SetCostFunction(Eigen::MatrixXd &H,
+  void SetCostFunction(Eigen::MatrixXd &H, Eigen::MatrixXd &g,
                        const std::vector<State> &reference_trajectory) {
     int num_rows = (StateDim + ControlDim) * (horizon_ - 1);
     int num_cols = (StateDim + ControlDim) * (horizon_ - 1);
 
     H = Eigen::MatrixXd::Zero(num_rows, num_cols);
+    g = Eigen::MatrixXd::Zero(num_rows, num_cols);
+
     Eigen::MatrixXd Q_R =
         Eigen::MatrixXd::Zero(StateDim + ControlDim, StateDim + ControlDim);
     Q_R.block(0, 0, StateDim, StateDim) = Q_;
     Q_R.block(StateDim, StateDim, ControlDim, ControlDim) = R_;
+    Eigen::MatrixXd Q_ZERO =
+        Eigen::MatrixXd::Zero(StateDim + ControlDim, StateDim + ControlDim);
+    Q_ZERO.block(0, 0, StateDim, StateDim) = Q_;
+
+    H.block(0, 0, ControlDim, ControlDim) = R_;
 
     int blockSize = StateDim + ControlDim;
     for (int i = 1; i < horizon_ - 1; ++i) {
       H.block((i - 1) * blockSize + ControlDim,
               (i - 1) * blockSize + ControlDim, blockSize, blockSize) = Q_R;
+
+      const State &xref = reference_trajectory[i];
+
+      // 直接构建对角矩阵
+      Eigen::MatrixXd X_REF =
+          Eigen::MatrixXd::Zero(StateDim + ControlDim, StateDim + ControlDim);
+      X_REF.diagonal().head(StateDim) = xref.head(StateDim);
+
+      // 计算 Q_X_REF
+      Eigen::MatrixXd Q_X_REF = Q_ZERO * X_REF;
+      std::cout << "Q_X_REF: \n" << Q_X_REF << std::endl;
+
+      // 将结果赋值到矩阵 g 中
+      g.block((i - 1) * blockSize + ControlDim,
+              (i - 1) * blockSize + ControlDim, blockSize, blockSize) =
+          -Q_X_REF;
     }
 
     H.block(num_rows - StateDim, num_cols - StateDim, StateDim, StateDim) =
         Q_N_;
 
-    for (int i = 0; i < horizon_ - 1; ++i) {
-      Eigen::MatrixXd Q_ref = Q_;
-      for (int j = 0; j < StateDim; ++j) {
-        Q_ref(j, j) *=
-            (reference_trajectory[i + 1](j) - reference_trajectory[i](j));
-      }
-      H.block(i * blockSize, i * blockSize, StateDim, StateDim) += Q_ref;
-    }
+    const State &xref = reference_trajectory[reference_trajectory.size() - 1];
+    Eigen::MatrixXd X_REF = Eigen::MatrixXd::Zero(StateDim, StateDim);
+    X_REF.diagonal().head(StateDim) = xref.head(StateDim);
+    Eigen::MatrixXd Q_X_REF = -Q_N_ * X_REF;
+    g.block(num_rows - StateDim, num_cols - StateDim, StateDim, StateDim) =
+        Q_X_REF;
 
-    ADEBUG << "Cost function matrix H:\n" << H;
+    ADEBUG << "Quadratic function matrix H:\n" << H;
+    ADEBUG << "Linear function matrix g:\n" << g;
   }
 
   void SetEqualityConstraints(Eigen::MatrixXd &A, Eigen::VectorXd &b,
