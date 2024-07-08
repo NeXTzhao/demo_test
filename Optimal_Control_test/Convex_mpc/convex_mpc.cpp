@@ -144,7 +144,7 @@ class MPC {
     const int num_in_constraints = (StateDim + ControlDim) * (horizon_ - 1);
 
     Eigen::MatrixXd H;
-    Eigen::MatrixXd g;
+    Eigen::VectorXd g;
     Eigen::MatrixXd A_t(StateDim, StateDim);
     Eigen::MatrixXd B_t(StateDim, ControlDim);
     vehicle_.linearize(initial_state, control[0], dt_, A_t, B_t);
@@ -172,8 +172,9 @@ class MPC {
     AINFO << "Initializing and solving QP problem";
     dense::QP<double> qp_solver(num_vars, num_eq_constraints,
                                 num_in_constraints);
-    qp_solver.init(H, g.transpose(), A, b, C, l, u);
+    qp_solver.init(H, g, A, b, C, l, u);
     qp_solver.solve();
+
     Eigen::VectorXd solution = qp_solver.results.x;
 
     // 初始化提取的控制输入和状态变量列表
@@ -199,7 +200,7 @@ class MPC {
     opt_u.push_back(u_last);
 
     // 将轨迹数据保存到成员变量
-    trajectory_ = state;
+    trajectory_ = opt_x;
 
     AINFO << "MPC solve complete";
     return control;
@@ -252,13 +253,13 @@ class MPC {
       ADEBUG << "Cost function matrix H:\n" << H;
     }
     */
-  void SetCostFunction(Eigen::MatrixXd &H, Eigen::MatrixXd &g,
+  void SetCostFunction(Eigen::MatrixXd &H, Eigen::VectorXd &g,
                        const std::vector<State> &reference_trajectory) {
     int num_rows = (StateDim + ControlDim) * (horizon_ - 1);
     int num_cols = (StateDim + ControlDim) * (horizon_ - 1);
 
     H = Eigen::MatrixXd::Zero(num_rows, num_cols);
-    g = Eigen::MatrixXd::Zero(num_rows, num_cols);
+    g = Eigen::VectorXd::Zero(num_rows);
 
     Eigen::MatrixXd Q_R =
         Eigen::MatrixXd::Zero(StateDim + ControlDim, StateDim + ControlDim);
@@ -274,33 +275,17 @@ class MPC {
     for (int i = 1; i < horizon_ - 1; ++i) {
       H.block((i - 1) * blockSize + ControlDim,
               (i - 1) * blockSize + ControlDim, blockSize, blockSize) = Q_R;
-
-      const State &xref = reference_trajectory[i];
-
-      // 直接构建对角矩阵
-      Eigen::MatrixXd X_REF =
-          Eigen::MatrixXd::Zero(StateDim + ControlDim, StateDim + ControlDim);
-      X_REF.diagonal().head(StateDim) = xref.head(StateDim);
-
-      // 计算 Q_X_REF
-      Eigen::MatrixXd Q_X_REF = Q_ZERO * X_REF;
-      std::cout << "Q_X_REF: \n" << Q_X_REF << std::endl;
-
-      // 将结果赋值到矩阵 g 中
-      g.block((i - 1) * blockSize + ControlDim,
-              (i - 1) * blockSize + ControlDim, blockSize, blockSize) =
-          -Q_X_REF;
     }
 
     H.block(num_rows - StateDim, num_cols - StateDim, StateDim, StateDim) =
         Q_N_;
 
+    for (int i = 1; i < horizon_; ++i) {
+      const State &xref = reference_trajectory[i];
+      g.segment(ControlDim + (i - 1) * blockSize, StateDim) = Q_ * xref;
+    }
     const State &xref = reference_trajectory[reference_trajectory.size() - 1];
-    Eigen::MatrixXd X_REF = Eigen::MatrixXd::Zero(StateDim, StateDim);
-    X_REF.diagonal().head(StateDim) = xref.head(StateDim);
-    Eigen::MatrixXd Q_X_REF = -Q_N_ * X_REF;
-    g.block(num_rows - StateDim, num_cols - StateDim, StateDim, StateDim) =
-        Q_X_REF;
+    g.segment(num_rows - StateDim, StateDim) = -Q_N_ * xref;
 
     ADEBUG << "Quadratic function matrix H:\n" << H;
     ADEBUG << "Linear function matrix g:\n" << g;
@@ -424,13 +409,14 @@ int main() {
   MPC<StateDim, ControlDim> mpc(vehicle, horizon, dt, Q, R, Q_N);
 
   Vehicle<StateDim, ControlDim>::State initial_state;
-  initial_state << 1, 1, 1, 1;
+  initial_state << 0, 0, 0, 0;
 
   std::vector<Vehicle<StateDim, ControlDim>::State> reference_trajectory(
       horizon + 1, initial_state);
   // 设置参考轨迹为简单的直线
   for (int i = 0; i <= horizon; ++i) {
     reference_trajectory[i](Vehicle<StateDim, ControlDim>::X) = i * dt;
+    reference_trajectory[i](Vehicle<StateDim, ControlDim>::Y) = i * dt * 0.5;
   }
 
   auto control_inputs = mpc.solve(initial_state, reference_trajectory);
@@ -439,15 +425,20 @@ int main() {
   const auto &trajectory = mpc.getTrajectory();
 
   // 提取轨迹中的X和Y坐标
-  std::vector<double> x_coords;
-  std::vector<double> y_coords;
+  std::vector<double> x_ref, y_ref;
+  std::vector<double> x_coords, y_coords;
+  for (const auto &state : reference_trajectory) {
+    x_ref.push_back(state(Vehicle<StateDim, ControlDim>::X));
+    y_ref.push_back(state(Vehicle<StateDim, ControlDim>::Y));
+  }
   for (const auto &state : trajectory) {
     x_coords.push_back(state(Vehicle<StateDim, ControlDim>::X));
     y_coords.push_back(state(Vehicle<StateDim, ControlDim>::Y));
   }
 
   // 可视化轨迹
-  plt::plot(x_coords, y_coords, "ro-");
+  plt::named_plot("opt", x_coords, y_coords, "ro-");
+  plt::named_plot("ref", x_ref, y_ref, "bo-");
   plt::xlabel("X");
   plt::ylabel("Y");
   plt::title("Vehicle Trajectory");

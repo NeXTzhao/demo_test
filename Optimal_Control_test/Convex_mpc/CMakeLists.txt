@@ -11,7 +11,7 @@ endif ()
 add_definitions(-DPLANNING_DEBUG=${PLANNING_DEBUG})
 
 list(APPEND CMAKE_PREFIX_PATH
-        "third_party/proxsuit_0_6_6"
+        "third_party/proxsuite"
 )
 
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
