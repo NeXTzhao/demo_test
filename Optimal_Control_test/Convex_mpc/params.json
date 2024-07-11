@@ -1,0 +1,39 @@
+{
+  "wheelbase": 2.5,
+  "max_speed": 33.33,
+  "min_speed": 0.0,
+  "max_acceleration": 10.0,
+  "min_acceleration": -10.0,
+  "max_steering_angle": 2.0,
+  "min_steering_angle": -2.0,
+  "horizon": 10,
+  "dt": 0.2,
+  "init_state": [
+    0.0,
+    0.0,
+    0.65,
+    0.1
+  ],
+  "Q": [
+    1.0,
+    1.0,
+    10.0,
+    1.0
+  ],
+  "R": [
+    1.0,
+    1.0
+  ],
+  "Q_N": [
+    10.0,
+    10.0,
+    1.0,
+    1.0
+  ],
+  "ref": [
+    1,
+    1,
+    0.79,
+    5
+  ]
+}

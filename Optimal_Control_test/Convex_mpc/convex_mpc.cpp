@@ -5,11 +5,60 @@
 
 #include "common/log.h"
 #include "common/matplotlibcpp.h"
+#include "nlohmann/json.hpp"
 #include "proxsuite/proxqp/dense/dense.hpp"
 
 namespace plt = matplotlibcpp;
+using json = nlohmann::json;
 using namespace proxsuite::proxqp;
 
+// 写入数据到CSV文件的函数
+void writeDataToCSV(const std::string& filename,
+                    const std::vector<std::vector<double>>& data,
+                    const std::vector<std::string>& headers) {
+  std::ofstream file(filename);
+  for (const auto& header : headers) {
+    file << header << ",";
+  }
+  file << "\n";
+
+  for (size_t i = 0; i < data[0].size(); ++i) {
+    for (const auto& column : data) {
+      file << column[i] << ",";
+    }
+    file << "\n";
+  }
+
+  file.close();
+}
+
+// 写入Eigen矩阵到CSV文件的函数
+void writeEigenToCSV(const std::string& filename,
+                     const Eigen::MatrixXd& matrix) {
+  std::ofstream file(filename);
+  if (file.is_open()) {
+    for (int i = 0; i < matrix.rows(); ++i) {
+      for (int j = 0; j < matrix.cols(); ++j) {
+        file << matrix(i, j);
+        if (j < matrix.cols() - 1) {
+          file << ",";
+        }
+      }
+      file << "\n";
+    }
+    file.close();
+  } else {
+    std::cerr << "Unable to open file " << filename << std::endl;
+  }
+}
+
+// 读取参数文件
+json readParams(const std::string& filename) {
+  std::ifstream file(filename);
+  json params;
+  file >> params;
+  return params;
+}
 // 通用范数计算函数模板
 template <int Order, int StateDim, int ControlDim>
 typename std::enable_if<Order != 0, double>::type computeNorm(
@@ -184,7 +233,8 @@ class MPC {
     dense::QP<double> qp_solver(num_vars, num_eq_constraints,
                                 num_in_constraints);
     qp_solver.init(H, g, A, b, C, l, u);
-
+    // 调试信息
+    std::vector<double> objective_values, primal_residuals, dual_residuals;
     for (int k = 0; k < horizon_ - 1; ++k) {
       // 更新不等式约束
       UpdateInequalityConstraints(l, u, state[k], control[k]);
@@ -192,6 +242,10 @@ class MPC {
       // 重新求解优化问题
       qp_solver.update(H, g, A, b, C, l, u);
       qp_solver.solve();
+
+      objective_values.push_back(qp_solver.results.info.objValue);
+      primal_residuals.push_back(qp_solver.results.info.pri_res);
+      dual_residuals.push_back(qp_solver.results.info.dua_res);
 
       // 提取当前时间步的控制输入增量 Δu
       Eigen::VectorXd solution = qp_solver.results.x;
@@ -205,7 +259,8 @@ class MPC {
 
       std::cout << "Control input increment delta_u: " << delta_u.transpose()
                 << std::endl;
-      std::cout << "Ref state: " << reference_trajectory[k + 1].transpose() << std::endl;
+      std::cout << "Ref state: " << reference_trajectory[k + 1].transpose()
+                << std::endl;
       std::cout << "New state: " << state[k + 1].transpose() << std::endl;
 
       // 更新下一步的线性化和约束
@@ -214,6 +269,26 @@ class MPC {
     }
 
     trajectory_ = state;
+    writeDataToCSV(
+        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/debug.csv",
+        {objective_values, primal_residuals, dual_residuals},
+        {"objective_value", "primal_residual", "dual_residual"});
+
+    // 保存矩阵 H, g, A, b, C, l, u
+    writeEigenToCSV(
+        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/H.csv", H);
+    writeEigenToCSV(
+        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/g.csv", g);
+    writeEigenToCSV(
+        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/A.csv", A);
+    writeEigenToCSV(
+        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/b.csv", b);
+    writeEigenToCSV(
+        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/C.csv", C);
+    writeEigenToCSV(
+        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/l.csv", l);
+    writeEigenToCSV(
+        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/u.csv", u);
 
     AINFO << "MPC solve complete";
     return control;
@@ -254,10 +329,13 @@ class MPC {
 
     for (int i = 1; i < horizon_; ++i) {
       const State& xref = reference_trajectory[i];
+      AINFO << "XREF: " << xref.transpose();
+      AINFO << "Q_XREF: " << (-Q_ * xref).transpose();
+
       g.segment(ControlDim + (i - 1) * blockSize, StateDim) = -Q_ * xref;
     }
     const State& x_n_ref = reference_trajectory.back();
-    std::cout << "x_back: \n" << x_n_ref <<std::endl;
+    AINFO << "x_back: \n" << x_n_ref;
     g.tail(StateDim) = -Q_N_ * x_n_ref;
 
     ADEBUG << "Quadratic function matrix H:\n" << H;
@@ -291,7 +369,7 @@ class MPC {
       }
     }
 
-    b.segment(0, StateDim) = -A_t * x0;
+    b.head(StateDim) = -A_t * x0;
     ADEBUG << "Equality constraint matrix A:\n" << A;
     ADEBUG << "Equality constraint vector b:\n" << b;
   }
@@ -400,45 +478,51 @@ class MPC {
 };
 
 int main() {
+  // 读取JSON文件
+  std::ifstream i(
+      "/home/next/demo_test/Optimal_Control_test/Convex_mpc/params.json");
+  json j;
+  i >> j;
+
   const int StateDim = 4;
   const int ControlDim = 2;
 
-  double wheelbase = 2.5;
-  double max_speed = 120 / 3.6;
-  double min_speed = 0.0;
-  double max_acceleration = 10.0;
-  double min_acceleration = -10.0;
-  double max_steering_angle = 2;
-  double min_steering_angle = -2;
-
-  int horizon = 10;
-  double dt = 0.2;
+  double wheelbase = j["wheelbase"];
+  double max_speed = j["max_speed"];
+  double min_speed = j["min_speed"];
+  double max_acceleration = j["max_acceleration"];
+  double min_acceleration = j["min_acceleration"];
+  double max_steering_angle = j["max_steering_angle"];
+  double min_steering_angle = j["min_steering_angle"];
+  int horizon = j["horizon"];
+  double dt = j["dt"];
 
   Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(StateDim, StateDim);
-  Q.diagonal() << 50.0, 50.0, 1.0, 0.5;
+  Q.diagonal() << j["Q"][0], j["Q"][1], j["Q"][2], j["Q"][3];
   Eigen::MatrixXd R = Eigen::MatrixXd::Identity(ControlDim, ControlDim);
-  R.diagonal() << 1.0, 1.0;
+  R.diagonal() << j["R"][0], j["R"][1];
   Eigen::MatrixXd Q_N = Eigen::MatrixXd::Identity(StateDim, StateDim);
-  Q_N.diagonal() << 10, 10, 10, 0.1;
+  Q_N.diagonal() << j["Q_N"][0], j["Q_N"][1], j["Q_N"][2], j["Q_N"][3];
 
   Vehicle<StateDim, ControlDim> vehicle(wheelbase, max_speed, min_speed,
                                         max_acceleration, min_acceleration,
                                         max_steering_angle, min_steering_angle);
 
-
   MPC<StateDim, ControlDim> mpc(vehicle, horizon, dt, Q, R, Q_N);
 
   Vehicle<StateDim, ControlDim>::State initial_state;
-  initial_state << 0.0, 0.0, 0.4, 5;
+  initial_state << j["init_state"][0], j["init_state"][1], j["init_state"][2],
+      j["init_state"][3];
 
   std::vector<Vehicle<StateDim, ControlDim>::State> targetTrajectory(
       horizon, initial_state);
   // 设置参考轨迹为简单的直线
   for (int i = 0; i < horizon; ++i) {
-    targetTrajectory[i](Vehicle<StateDim, ControlDim>::X) = i;
-    targetTrajectory[i](Vehicle<StateDim, ControlDim>::Y) = i;
+    double t = i;
+    targetTrajectory[i](Vehicle<StateDim, ControlDim>::X) = t;
+    targetTrajectory[i](Vehicle<StateDim, ControlDim>::Y) = t;
     targetTrajectory[i](Vehicle<StateDim, ControlDim>::THETA) = 0.79;
-    targetTrajectory[i](Vehicle<StateDim, ControlDim>::V) = 5;
+    targetTrajectory[i](Vehicle<StateDim, ControlDim>::V) = j["ref"][3];
   }
 
   auto control_inputs = mpc.solve(initial_state, targetTrajectory);
@@ -447,7 +531,7 @@ int main() {
   const auto& trajectory = mpc.getTrajectory();
 
   // 提取轨迹中的X和Y坐标
-  std::vector<double> x_ref, y_ref, x_coords, y_coords;
+  std::vector<double> x_ref, y_ref, x_coords, y_coords, v_coords, theta_coords;
   for (const auto& state : targetTrajectory) {
     x_ref.push_back(state(Vehicle<StateDim, ControlDim>::X));
     y_ref.push_back(state(Vehicle<StateDim, ControlDim>::Y));
@@ -455,17 +539,66 @@ int main() {
   for (const auto& state : trajectory) {
     x_coords.push_back(state(Vehicle<StateDim, ControlDim>::X));
     y_coords.push_back(state(Vehicle<StateDim, ControlDim>::Y));
+    theta_coords.push_back(state(Vehicle<StateDim, ControlDim>::THETA));
+    v_coords.push_back(state(Vehicle<StateDim, ControlDim>::V));
+  }
+  // 提取控制量中的A和DELTA
+  std::vector<double> a_values, delta_values;
+  for (const auto& control : control_inputs) {
+    a_values.push_back(control(Vehicle<StateDim, ControlDim>::A));
+    delta_values.push_back(control(Vehicle<StateDim, ControlDim>::DELTA));
   }
 
-  // 可视化轨迹
-  plt::named_plot("ref", x_ref, y_ref, "bo-");
-  plt::named_plot("opt", x_coords, y_coords, "ro-");
-  plt::xlabel("X");
-  plt::ylabel("Y");
-  plt::grid(true);
-  plt::legend();
-  plt::title("Vehicle Trajectory");
-  plt::show();
+  // 将所有数据写入一个CSV文件
+  writeDataToCSV(
+      "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/data.csv",
+      {x_ref, y_ref, x_coords, y_coords, v_coords, theta_coords, a_values,
+       delta_values},
+      {"x_ref", "y_ref", "x_coords", "y_coords", "velocity", "theta",
+       "acceleration", "steering_angle"});
 
+  bool flag = false;
+  if (flag) {
+    // 设置画面大小并可视化轨迹
+    plt::figure_size(1200, 800);
+    plt::named_plot("Reference", x_ref, y_ref, "bo-");
+    plt::named_plot("Optimized", x_coords, y_coords, "ro-");
+    plt::xlabel("X");
+    plt::ylabel("Y");
+    plt::grid(true);
+    plt::legend();
+    plt::title("Vehicle Trajectory");
+
+    // 设置画面大小并可视化控制量
+    plt::figure_size(1200, 1200);
+    plt::subplot(4, 1, 1);
+    plt::named_plot("Acceleration", a_values, "ro-");
+    plt::ylabel("Acceleration");
+    plt::grid(true);
+    plt::legend();
+    plt::title("Control Inputs");
+
+    plt::subplot(4, 1, 2);
+    plt::named_plot("Steering Angle", delta_values, "bo-");
+    plt::xlabel("Time step");
+    plt::ylabel("Steering Angle");
+    plt::grid(true);
+    plt::legend();
+
+    plt::subplot(4, 1, 3);
+    plt::named_plot("Velocity", v_coords, "go-");
+    plt::ylabel("Velocity");
+    plt::grid(true);
+    plt::title("Vehicle States");
+
+    plt::subplot(4, 1, 4);
+    plt::named_plot("Theta", theta_coords, "mo-");
+    plt::xlabel("Time step");
+    plt::ylabel("Theta");
+    plt::grid(true);
+
+    plt::tight_layout();
+    plt::show();
+  }
   return 0;
 }
