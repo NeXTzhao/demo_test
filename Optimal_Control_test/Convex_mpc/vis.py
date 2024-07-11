@@ -119,7 +119,7 @@ def plot_matrix(matrix, title):
 		z=matrix,
 		x=[f'{i}' for i in range(matrix.shape[1])],
 		y=[f'{i}' for i in range(matrix.shape[0])][::-1],  # 反转 y 轴顺序
-		colorscale='Viridis',  # 使用 Viridis 颜色映射
+		colorscale='YlGnBu',  # 使用 Viridis 颜色映射
 		text=matrix,
 		texttemplate="%{text:.2f}",
 		hoverinfo='x+y+z'  # 显示 x, y, z 值
@@ -151,7 +151,7 @@ def plot_combined_matrices(matrices, titles):
 				z=matrix,
 				x=[f'{j}' for j in range(matrix.shape[1])],
 				y=[f'{j}' for j in range(matrix.shape[0])][::-1],  # 反转 y 轴顺序
-				colorscale='Viridis',  # 使用指定的颜色映射
+				colorscale='YlGnBu',  # 使用指定的颜色映射
 				text=matrix,
 				texttemplate="%{text:.2f}",
 				hoverinfo='x+y+z'
@@ -159,7 +159,6 @@ def plot_combined_matrices(matrices, titles):
 		fig.add_trace(heatmap, row=1, col=i + 1)
 
 		# 更新布局
-		# fig.update_layout(height=400, showlegend=False)
 		fig.update_layout(
 			title=title,
 			xaxis_title='Columns',
