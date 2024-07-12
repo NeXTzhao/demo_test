@@ -257,11 +257,9 @@ class MPC {
       // 使用系统动力学模型更新状态
       state[k + 1] = vehicle_.updateState(state[k], control[k], dt_);
 
-      std::cout << "Control input increment delta_u: " << delta_u.transpose()
-                << std::endl;
-      std::cout << "Ref state: " << reference_trajectory[k + 1].transpose()
-                << std::endl;
-      std::cout << "New state: " << state[k + 1].transpose() << std::endl;
+      AINFO << "Control input increment delta_u: " << delta_u.transpose();
+      AINFO << "Ref state: " << reference_trajectory[k + 1].transpose();
+      AINFO << "New state: " << state[k + 1].transpose();
 
       // 更新下一步的线性化和约束
       vehicle_.linearize(state[k + 1], control[k], dt_, A_t, B_t);
