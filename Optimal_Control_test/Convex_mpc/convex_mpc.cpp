@@ -12,6 +12,9 @@ namespace plt = matplotlibcpp;
 using json = nlohmann::json;
 using namespace proxsuite::proxqp;
 
+const std::string root_path =
+    "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/";
+
 // 写入数据到CSV文件的函数
 void writeDataToCSV(const std::string& filename,
                     const std::vector<std::vector<double>>& data,
@@ -266,47 +269,24 @@ class MPC {
       AINFO << "SOL:\n" << solution;
       // 更新下一步的线性化和约束
       vehicle_.linearize(state[k + 1], control[k], dt_, A_t, B_t);
-      SetEqualityConstraints(A, b, A_t, B_t, state[k+1]);
-      UpdateEqualityConstraints(A_t, state[k+1], b);
+      SetEqualityConstraints(A, b, A_t, B_t, state[k + 1]);
+      UpdateEqualityConstraints(A_t, state[k + 1], b);
       UpdateInequalityConstraints(l, u, state[k], control[k]);
     }
 
     trajectory_ = state;
-    writeDataToCSV(
-        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-        "debug.csv",
-        {objective_values, primal_residuals, dual_residuals},
-        {"objective_value", "primal_residual", "dual_residual"});
+    writeDataToCSV(root_path + "debug.csv",
+                   {objective_values, primal_residuals, dual_residuals},
+                   {"objective_value", "primal_residual", "dual_residual"});
 
     // 保存矩阵 H, g, A, b, C, l, u
-    writeEigenToCSV(
-        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-        "H.csv",
-        H);
-    writeEigenToCSV(
-        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-        "g.csv",
-        g);
-    writeEigenToCSV(
-        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-        "A.csv",
-        A);
-    writeEigenToCSV(
-        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-        "b.csv",
-        b);
-    writeEigenToCSV(
-        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-        "C.csv",
-        C);
-    writeEigenToCSV(
-        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-        "l.csv",
-        l);
-    writeEigenToCSV(
-        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-        "u.csv",
-        u);
+    writeEigenToCSV(root_path + "H.csv", H);
+    writeEigenToCSV(root_path + "g.csv", g);
+    writeEigenToCSV(root_path + "A.csv", A);
+    writeEigenToCSV(root_path + "b.csv", b);
+    writeEigenToCSV(root_path + "C.csv", C);
+    writeEigenToCSV(root_path + "l.csv", l);
+    writeEigenToCSV(root_path + "u.csv", u);
 
     AINFO << "MPC solve complete";
     return control;
@@ -502,9 +482,7 @@ class MPC {
 
 int main() {
   // 读取JSON文件
-  std::ifstream i(
-      "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/"
-      "params.json");
+  std::ifstream i(root_path + "params.json");
   json j;
   i >> j;
 
@@ -574,13 +552,11 @@ int main() {
   }
 
   // 将所有数据写入一个CSV文件
-  writeDataToCSV(
-      "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
-      "data.csv",
-      {x_ref, y_ref, x_coords, y_coords, v_coords, theta_coords, a_values,
-       delta_values},
-      {"x_ref", "y_ref", "x_coords", "y_coords", "velocity", "theta",
-       "acceleration", "steering_angle"});
+  writeDataToCSV(root_path + "data.csv",
+                 {x_ref, y_ref, x_coords, y_coords, v_coords, theta_coords,
+                  a_values, delta_values},
+                 {"x_ref", "y_ref", "x_coords", "y_coords", "velocity", "theta",
+                  "acceleration", "steering_angle"});
 
   bool flag = false;
   if (flag) {
