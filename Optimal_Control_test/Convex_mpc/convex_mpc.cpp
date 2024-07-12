@@ -236,9 +236,6 @@ class MPC {
     // 调试信息
     std::vector<double> objective_values, primal_residuals, dual_residuals;
     for (int k = 0; k < horizon_ - 1; ++k) {
-      // 更新不等式约束
-      UpdateInequalityConstraints(l, u, state[k], control[k]);
-
       // 重新求解优化问题
       qp_solver.update(H, g, A, b, C, l, u);
       qp_solver.solve();
@@ -250,43 +247,66 @@ class MPC {
       // 提取当前时间步的控制输入增量 Δu
       Eigen::VectorXd solution = qp_solver.results.x;
       Eigen::VectorXd delta_u = solution.segment(0, ControlDim);
+      Eigen::VectorXd new_state = solution.segment(ControlDim, StateDim);
 
       // 更新控制输入
       control[k] += delta_u;
 
       // 使用系统动力学模型更新状态
       state[k + 1] = vehicle_.updateState(state[k], control[k], dt_);
-
-      AINFO << "Control input increment delta_u: " << delta_u.transpose();
-      AINFO << "Ref state: " << reference_trajectory[k + 1].transpose();
-      AINFO << "New state: " << state[k + 1].transpose();
-
+      //      state[k + 1] = new_state;
+      //      std::cout << "Control input increment delta_u: " <<
+      //      delta_u.transpose()
+      //                << std::endl;
+      //      std::cout << "Ref state: " << reference_trajectory[k +
+      //      1].transpose()
+      //                << std::endl;
+      //      std::cout << "New state: " << state[k + 1].transpose() <<
+      //      std::endl;
+      AINFO << "SOL:\n" << solution;
       // 更新下一步的线性化和约束
       vehicle_.linearize(state[k + 1], control[k], dt_, A_t, B_t);
-      SetEqualityConstraints(A, b, A_t, B_t, state[k + 1]);
+      SetEqualityConstraints(A, b, A_t, B_t, state[k+1]);
+      UpdateEqualityConstraints(A_t, state[k+1], b);
+      UpdateInequalityConstraints(l, u, state[k], control[k]);
     }
 
     trajectory_ = state;
     writeDataToCSV(
-        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/debug.csv",
+        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+        "debug.csv",
         {objective_values, primal_residuals, dual_residuals},
         {"objective_value", "primal_residual", "dual_residual"});
 
     // 保存矩阵 H, g, A, b, C, l, u
     writeEigenToCSV(
-        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/H.csv", H);
+        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+        "H.csv",
+        H);
     writeEigenToCSV(
-        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/g.csv", g);
+        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+        "g.csv",
+        g);
     writeEigenToCSV(
-        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/A.csv", A);
+        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+        "A.csv",
+        A);
     writeEigenToCSV(
-        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/b.csv", b);
+        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+        "b.csv",
+        b);
     writeEigenToCSV(
-        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/C.csv", C);
+        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+        "C.csv",
+        C);
     writeEigenToCSV(
-        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/l.csv", l);
+        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+        "l.csv",
+        l);
     writeEigenToCSV(
-        "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/u.csv", u);
+        "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+        "u.csv",
+        u);
 
     AINFO << "MPC solve complete";
     return control;
@@ -430,7 +450,12 @@ class MPC {
     ADEBUG << "Inequality lower bound vector l:\n" << l;
     ADEBUG << "Inequality upper bound vector u:\n" << u;
   }
-
+  void UpdateEqualityConstraints(const Eigen::MatrixXd& A_t,
+                                 const Eigen::VectorXd& x0,
+                                 Eigen::VectorXd& b) {
+    b.head(StateDim) = -A_t * x0;
+    ADEBUG << "Equality constraint vector b:\n" << b;
+  }
   void UpdateInequalityConstraints(Eigen::VectorXd& l, Eigen::VectorXd& u,
                                    const State& state, const Control& control) {
     double min_a = vehicle_.min_a;
@@ -478,7 +503,8 @@ class MPC {
 int main() {
   // 读取JSON文件
   std::ifstream i(
-      "/home/next/demo_test/Optimal_Control_test/Convex_mpc/params.json");
+      "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/"
+      "params.json");
   json j;
   i >> j;
 
@@ -549,7 +575,8 @@ int main() {
 
   // 将所有数据写入一个CSV文件
   writeDataToCSV(
-      "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/data.csv",
+      "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/"
+      "data.csv",
       {x_ref, y_ref, x_coords, y_coords, v_coords, theta_coords, a_values,
        delta_values},
       {"x_ref", "y_ref", "x_coords", "y_coords", "velocity", "theta",
