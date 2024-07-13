@@ -13,7 +13,7 @@ using json = nlohmann::json;
 using namespace proxsuite::proxqp;
 
 const std::string root_path =
-    "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/";
+    "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/";
 
 // 写入数据到CSV文件的函数
 void writeDataToCSV(const std::string& filename,
@@ -189,10 +189,11 @@ class MPC {
                              const std::vector<State>& reference_trajectory) {
     // 初始化优化变量
     std::vector<State> state(horizon_, State::Zero());
-    std::vector<Control> control(horizon_ - 1, Control::Zero());
+    std::vector<Control> control(horizon_, Control::Zero());
 
     // 初始化状态
     state[0] = initial_state;
+    control[0] << 0.1, 0.1;
 
     const int num_vars = (StateDim + ControlDim) * (horizon_ - 1);
     const int num_eq_constraints = StateDim * (horizon_ - 1);
@@ -236,43 +237,28 @@ class MPC {
     dense::QP<double> qp_solver(num_vars, num_eq_constraints,
                                 num_in_constraints);
     qp_solver.init(H, g, A, b, C, l, u);
+    qp_solver.solve();
+
+    Eigen::VectorXd solution = qp_solver.results.x;
+
+    AINFO << "X: \n" << solution;
+    for (int i = 0; i < horizon_ - 1; ++i) {
+      if (i == 0) {
+        control[i + 1] = solution.segment(0, ControlDim);
+      } else {
+        int index = (i - 1) * (StateDim + ControlDim) + ControlDim;
+        state[i] = solution.segment(index, StateDim);
+        control[i] = solution.segment(index + StateDim, ControlDim);
+      }
+    }
+    state.back() = solution.tail(StateDim);
+    control.back() = control[control.size() - 2];
+
     // 调试信息
     std::vector<double> objective_values, primal_residuals, dual_residuals;
-    for (int k = 0; k < horizon_ - 1; ++k) {
-      // 重新求解优化问题
-      qp_solver.update(H, g, A, b, C, l, u);
-      qp_solver.solve();
-
-      objective_values.push_back(qp_solver.results.info.objValue);
-      primal_residuals.push_back(qp_solver.results.info.pri_res);
-      dual_residuals.push_back(qp_solver.results.info.dua_res);
-
-      // 提取当前时间步的控制输入增量 Δu
-      Eigen::VectorXd solution = qp_solver.results.x;
-      Eigen::VectorXd delta_u = solution.segment(0, ControlDim);
-      Eigen::VectorXd new_state = solution.segment(ControlDim, StateDim);
-
-      // 更新控制输入
-      control[k] += delta_u;
-
-      // 使用系统动力学模型更新状态
-      state[k + 1] = vehicle_.updateState(state[k], control[k], dt_);
-      //      state[k + 1] = new_state;
-      //      std::cout << "Control input increment delta_u: " <<
-      //      delta_u.transpose()
-      //                << std::endl;
-      //      std::cout << "Ref state: " << reference_trajectory[k +
-      //      1].transpose()
-      //                << std::endl;
-      //      std::cout << "New state: " << state[k + 1].transpose() <<
-      //      std::endl;
-      AINFO << "SOL:\n" << solution;
-      // 更新下一步的线性化和约束
-      vehicle_.linearize(state[k + 1], control[k], dt_, A_t, B_t);
-      SetEqualityConstraints(A, b, A_t, B_t, state[k + 1]);
-      UpdateEqualityConstraints(A_t, state[k + 1], b);
-      UpdateInequalityConstraints(l, u, state[k], control[k]);
-    }
+    objective_values.push_back(qp_solver.results.info.objValue);
+    primal_residuals.push_back(qp_solver.results.info.pri_res);
+    dual_residuals.push_back(qp_solver.results.info.dua_res);
 
     trajectory_ = state;
     writeDataToCSV(root_path + "debug.csv",
@@ -325,15 +311,11 @@ class MPC {
     H.block(num_rows - StateDim, num_cols - StateDim, StateDim, StateDim) =
         Q_N_;
 
-    for (int i = 1; i < horizon_; ++i) {
+    for (int i = 1; i < horizon_ - 1; ++i) {
       const State& xref = reference_trajectory[i];
-      AINFO << "XREF: " << xref.transpose();
-      AINFO << "Q_XREF: " << (-Q_ * xref).transpose();
-
       g.segment(ControlDim + (i - 1) * blockSize, StateDim) = -Q_ * xref;
     }
     const State& x_n_ref = reference_trajectory.back();
-    AINFO << "x_back: \n" << x_n_ref;
     g.tail(StateDim) = -Q_N_ * x_n_ref;
 
     ADEBUG << "Quadratic function matrix H:\n" << H;
@@ -386,7 +368,8 @@ class MPC {
     double max_delta = vehicle_.max_delta;
     double min_v = vehicle_.min_speed;
     double max_v = vehicle_.max_speed;
-    double inf = std::numeric_limits<double>::infinity();
+    //    double inf = std::numeric_limits<double>::infinity();`
+    double inf = 1e10;
 
     // State bounds
     Eigen::VectorXd MIN_X(StateDim);
@@ -430,6 +413,7 @@ class MPC {
     ADEBUG << "Inequality lower bound vector l:\n" << l;
     ADEBUG << "Inequality upper bound vector u:\n" << u;
   }
+
   void UpdateEqualityConstraints(const Eigen::MatrixXd& A_t,
                                  const Eigen::VectorXd& x0,
                                  Eigen::VectorXd& b) {
