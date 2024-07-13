@@ -10,25 +10,18 @@ debug_df = pd.read_csv('data/debug.csv')
 
 # 可视化轨迹
 st.title('Vehicle Trajectory')
+
+# 创建按钮来控制显示2D和3D视图
+view = st.radio('Select View', ('2D', '3D'), index=0)
 fig = go.Figure()
 
-# 添加参考轨迹
-fig.add_trace(go.Scatter(x=data_df['x_ref'], y=data_df['y_ref'], mode='lines+markers', name='Reference',
-                         marker=dict(color='blue')))
-# 添加优化轨迹
-fig.add_trace(go.Scatter(x=data_df['x_coords'], y=data_df['y_coords'], mode='lines+markers', name='Optimized',
-                         marker=dict(color='red')))
+# 车辆尺寸
+vehicle_length = 4.0
+vehicle_width = 1.8
 
-# 添加车辆位置和方向
-vehicle_length = 4.0  # 车辆长度
-vehicle_width = 1.8  # 车辆宽度
 
-for i in range(len(data_df)):
-    x = data_df['x_coords'][i]
-    y = data_df['y_coords'][i]
-    theta = data_df['theta'][i]
-
-    # 计算车辆的四个角点
+# 计算车辆的四个角点
+def get_vehicle_corners(x, y, theta):
     corners_x = [
         x + (vehicle_length / 2) * np.cos(theta) - (vehicle_width / 2) * np.sin(theta),
         x + (vehicle_length / 2) * np.cos(theta) + (vehicle_width / 2) * np.sin(theta),
@@ -36,7 +29,6 @@ for i in range(len(data_df)):
         x - (vehicle_length / 2) * np.cos(theta) - (vehicle_width / 2) * np.sin(theta),
         x + (vehicle_length / 2) * np.cos(theta) - (vehicle_width / 2) * np.sin(theta)
     ]
-
     corners_y = [
         y + (vehicle_length / 2) * np.sin(theta) + (vehicle_width / 2) * np.cos(theta),
         y + (vehicle_length / 2) * np.sin(theta) - (vehicle_width / 2) * np.cos(theta),
@@ -44,11 +36,46 @@ for i in range(len(data_df)):
         y - (vehicle_length / 2) * np.sin(theta) + (vehicle_width / 2) * np.cos(theta),
         y + (vehicle_length / 2) * np.sin(theta) + (vehicle_width / 2) * np.cos(theta)
     ]
-    fig.add_trace(go.Scatter(x=corners_x, y=corners_y, mode='lines', line=dict(color='black'), showlegend=False))
-# 设置x轴和y轴比例相同
-fig.update_xaxes(scaleanchor="y", scaleratio=1)
-fig.update_yaxes(scaleanchor="x", scaleratio=1)
-fig.update_layout(xaxis_title='X (m)', yaxis_title='Y (m)', autosize=True)
+    return corners_x, corners_y
+
+
+# 绘制2D视图
+def plot_2d():
+    fig.add_trace(go.Scatter(x=data_df['x_ref'], y=data_df['y_ref'], mode='lines+markers', name='Reference 2D',
+                             marker=dict(color='blue')))
+    fig.add_trace(go.Scatter(x=data_df['x_coords'], y=data_df['y_coords'], mode='lines+markers', name='Optimized 2D',
+                             marker=dict(color='red')))
+    for i in range(len(data_df)):
+        corners_x, corners_y = get_vehicle_corners(data_df['x_coords'][i], data_df['y_coords'][i], data_df['theta'][i])
+        fig.add_trace(go.Scatter(x=corners_x, y=corners_y, mode='lines', line=dict(color='black'), showlegend=False))
+    fig.update_xaxes(scaleanchor="y", scaleratio=1)
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    fig.update_layout(xaxis_title='X (m)', yaxis_title='Y (m)', autosize=True)
+
+
+# 绘制3D视图
+def plot_3d():
+    fig.add_trace(
+        go.Scatter3d(x=data_df['x_ref'], y=data_df['y_ref'], z=data_df.index, mode='lines+markers', name='Reference 3D',
+                     marker=dict(color='blue', opacity=1.0)))
+    fig.add_trace(go.Scatter3d(x=data_df['x_coords'], y=data_df['y_coords'], z=data_df.index, mode='lines+markers',
+                               name='Optimized 3D', marker=dict(color='red', opacity=1.0)))
+    fig.add_trace(go.Scatter3d(x=data_df['x_ref'], y=data_df['y_ref'], z=[0] * len(data_df), mode='lines+markers',
+                               name='Reference 2D', marker=dict(color='blue', opacity=0.5)))
+    fig.add_trace(go.Scatter3d(x=data_df['x_coords'], y=data_df['y_coords'], z=[0] * len(data_df), mode='lines+markers',
+                               name='Optimized 2D', marker=dict(color='red', opacity=0.5)))
+    for i in range(len(data_df)):
+        corners_x, corners_y = get_vehicle_corners(data_df['x_coords'][i], data_df['y_coords'][i], data_df['theta'][i])
+        fig.add_trace(
+            go.Scatter3d(x=corners_x, y=corners_y, z=[0] * 5, mode='lines', line=dict(color='black'), showlegend=False))
+    fig.update_layout(width=960, height=960,
+                      scene=dict(xaxis=dict(title='X (m)'), yaxis=dict(title='Y (m)'), zaxis=dict(title='Index')))
+
+
+if view == '2D':
+    plot_2d()
+else:
+    plot_3d()
 
 st.plotly_chart(fig)
 
@@ -62,10 +89,10 @@ fig.add_trace(
 fig.add_trace(
     go.Scatter(y=data_df['steering_angle'], mode='lines+markers', name='Steering Angle', marker=dict(color='blue')),
     row=1, col=2)
-fig.add_trace(
-    go.Scatter(y=data_df['velocity'], mode='lines+markers', name='Velocity', marker=dict(color='green')), row=2, col=1)
-fig.add_trace(
-    go.Scatter(y=data_df['theta'], mode='lines+markers', name='Theta', marker=dict(color='magenta')), row=2, col=2)
+fig.add_trace(go.Scatter(y=data_df['velocity'], mode='lines+markers', name='Velocity', marker=dict(color='green')),
+              row=2, col=1)
+fig.add_trace(go.Scatter(y=data_df['theta'], mode='lines+markers', name='Theta', marker=dict(color='magenta')), row=2,
+              col=2)
 
 fig.update_layout(autosize=True)
 st.plotly_chart(fig)
