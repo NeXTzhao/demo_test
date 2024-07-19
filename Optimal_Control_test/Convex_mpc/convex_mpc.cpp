@@ -13,7 +13,7 @@ using json = nlohmann::json;
 using namespace proxsuite::proxqp;
 
 const std::string root_path =
-    "/home/next/Documents/demo_test/Optimal_Control_test/Convex_mpc/data/";
+    "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/";
 
 // 写入数据到CSV文件的函数
 void writeDataToCSV(const std::string& filename,
