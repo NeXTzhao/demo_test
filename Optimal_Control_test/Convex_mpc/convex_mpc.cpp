@@ -62,6 +62,7 @@ json readParams(const std::string& filename) {
   file >> params;
   return params;
 }
+
 // 通用范数计算函数模板
 template <int Order, int StateDim, int ControlDim>
 typename std::enable_if<Order != 0, double>::type computeNorm(

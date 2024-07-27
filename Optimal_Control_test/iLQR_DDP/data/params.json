@@ -1,0 +1,49 @@
+{
+  "vehicle_params": {
+    "wheelbase": 2.5,
+    "max_speed": 33.33,
+    "min_speed": 0.0,
+    "max_acceleration": 5.0,
+    "min_acceleration": -5.0,
+    "max_steering_angle": 0.79,
+    "min_steering_angle": -0.79
+  },
+  "simulate": {
+    "horizon": 10,
+    "dt": 0.2
+  },
+  "line_search_param": {
+    "alpha_min": 1e-4,
+    "alpha_max": 1.0,
+    "alpha_decay": 0.5,
+    "c1": 1e-4
+  },
+  "init_state": [
+    0.0,
+    0.0,
+    0.15,
+    5
+  ],
+  "Q": [
+    1.0,
+    1.0,
+    10.0,
+    1.0
+  ],
+  "R": [
+    1.0,
+    1.0
+  ],
+  "Q_N": [
+    10.0,
+    10.0,
+    1.0,
+    1.0
+  ],
+  "ref": [
+    1,
+    1,
+    0.79,
+    5
+  ]
+}
