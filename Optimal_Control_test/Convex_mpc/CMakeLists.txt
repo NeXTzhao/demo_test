@@ -15,6 +15,7 @@ list(APPEND CMAKE_PREFIX_PATH
 )
 
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+include_directories(third_party/tinympc)
 conan_basic_setup()
 
 find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
@@ -26,4 +27,28 @@ target_link_libraries(convex_mpc
         ${CONAN_LIBS}
         Python3::Python
         Python3::NumPy
+)
+
+add_executable(convex_mpc_spares convex_mpc_spares.cpp)
+target_link_libraries(convex_mpc_spares
+        proxsuite::proxsuite
+        ${CONAN_LIBS}
+        Python3::Python
+        Python3::NumPy
+)
+
+add_library(tinympcstatic STATIC
+        third_party/tinympc/admm.cpp
+        third_party/tinympc/tiny_api.cpp
+        third_party/tinympc/codegen.cpp
+)
+
+
+add_executable(tinympc_spares tinympc_spares.cpp)
+target_link_libraries(tinympc_spares
+        proxsuite::proxsuite
+        ${CONAN_LIBS}
+        Python3::Python
+        Python3::NumPy
+        tinympcstatic
 )

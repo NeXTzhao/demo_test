@@ -22,3 +22,9 @@ target_link_libraries(sparse_matrix
 		Python3::Python
 		Python3::NumPy
 		Eigen3::Eigen)
+
+add_executable(regularization regularization.cpp)
+target_link_libraries(regularization
+		Python3::Python
+		Python3::NumPy
+		Eigen3::Eigen)

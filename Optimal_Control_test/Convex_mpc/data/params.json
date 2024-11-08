@@ -1,36 +1,62 @@
 {
   "wheelbase": 2.5,
-  "max_speed": 33.33,
+
+  "max_speed": 35,
   "min_speed": 0.0,
+
   "max_acceleration": 5.0,
   "min_acceleration": -5.0,
-  "max_steering_angle": 0.79,
-  "min_steering_angle": -0.79,
-  "horizon": 10,
+
+  "max_steering_angle": 0.5,
+  "min_steering_angle": -0.5,
+
+  "max_alpha": 2.0,
+  "min_alpha": -2.0,
+
+  "max_jerk": 2.0,
+  "min_jerk": -5.0,
+
+  "horizon": 35,
   "dt": 0.2,
   "init_state": [
     0.0,
     0.0,
-    0.15,
-    5
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
   ],
   "Q": [
+    0.10,
+    20.0,
+    1.0,
+    250.0,
     1.0,
     1.0,
-    10.0,
+    1.0,
     1.0
   ],
   "R": [
-    1.0,
-    1.0
+    200.0,
+    100.0
   ],
   "Q_N": [
-    10.0,
-    10.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
     1.0,
     1.0
   ],
   "ref": [
+    1,
+    1,
+    0.79,
+    5,
     1,
     1,
     0.79,
