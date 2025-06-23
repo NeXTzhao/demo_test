@@ -57,7 +57,7 @@ class Vehicle {
 
   State updateState(const State& state, Control& control, double dt) const {
     // Apply control limits
-    control = applyControlLimits(control);
+//    control = applyControlLimits(control);
 
     State k1 = dynamics(state, control);
     State k2 = dynamics(state + 0.5 * dt * k1, control);
@@ -240,10 +240,23 @@ class ShootingMethod {
 
     // 计算运行成本
     double running_cost = 0.0;
+
+    double max_acc = 2.5;
+    double min_acc = -4;
+    double weight_acc = 5000;
+
     for (size_t k = 0; k < u.size(); ++k) {
       Eigen::Matrix<double, StateDim, 1> state_error = x.col(k) - targetTrajectory.col(k);
       running_cost +=
           0.5 * (state_error.transpose() * Q * state_error).value() + 0.5 * (u[k].transpose() * R * u[k]).value();
+
+      if (u[k][0] < min_acc) {
+        running_cost += weight_acc * std::pow(min_acc - u[k][0], 2);
+      }
+
+      if (u[k][0] > max_acc) {
+        running_cost += weight_acc * std::pow(u[k][0] - max_acc, 2);
+      }
     }
 //    AINFO << "-------------- Calculate Cost Process --------------------";
 //    ADEBUG << "Terminal Cost: " << terminal_cost
@@ -292,7 +305,7 @@ class ShootingMethod {
     std::vector<Control> u_new(controls.size());
     for (size_t k = 0; k < controls.size(); ++k) {
       u_new[k] = controls[k] + alpha * delta_u[k];
-      u_new[k] = vehicle.applyControlLimits(u_new[k]);
+//      u_new[k] = vehicle.applyControlLimits(u_new[k]);
     }
     return u_new;
   }

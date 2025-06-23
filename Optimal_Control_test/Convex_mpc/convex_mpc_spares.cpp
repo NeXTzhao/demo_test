@@ -15,7 +15,10 @@ using json = nlohmann::json;
 using namespace proxsuite::proxqp;
 
 const std::string root_path =
-    "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/";
+    "/home/next/要备份的/demo_test/Optimal_Control_test/Convex_mpc/data/";
+const std::string row_traj_path =
+    "/home/next/要备份的/demo_test/Optimal_Control_test/Convex_mpc/"
+    "trajectory.csv";
 
 // 写入数据到CSV文件的函数
 void writeDataToCSV(const std::string& filename,
@@ -55,36 +58,6 @@ void writeEigenToCSV(const std::string& filename,
   } else {
     std::cerr << "Unable to open file " << filename << std::endl;
   }
-}
-
-// 读取参数文件
-json readParams(const std::string& filename) {
-  std::ifstream file(filename);
-  json params;
-  file >> params;
-  return params;
-}
-
-// 通用范数计算函数模板
-template <int Order, int StateDim, int ControlDim>
-typename std::enable_if<Order != 0, double>::type computeNorm(
-    const std::vector<Eigen::Matrix<double, ControlDim, 1>>& delta_u) {
-  double norm = 0.0;
-  for (const auto& control : delta_u) {
-    norm += std::pow(control.template lpNorm<Order>(), Order);
-  }
-  return std::pow(norm, 1.0 / Order);
-}
-
-// 特化无穷范数
-template <int Order, int StateDim, int ControlDim>
-typename std::enable_if<Order == 0, double>::type computeNorm(
-    const std::vector<Eigen::Matrix<double, ControlDim, 1>>& delta_u) {
-  double max_norm = 0.0;
-  for (const auto& control : delta_u) {
-    max_norm = std::max(max_norm, control.template lpNorm<Eigen::Infinity>());
-  }
-  return max_norm;
 }
 
 template <int StateDim, int ControlDim>
@@ -127,6 +100,25 @@ class Vehicle {
         max_jerk(_max_jerk),
         min_jerk(_min_jerk) {}
 
+  std::vector<State> simulate(const State& initial_state,
+                              const std::vector<Control>& controls,
+                              double increment, int USE_RK = 4) const {
+    std::vector<State> states;
+    states.reserve(controls.size() + 1);  // 预留空间以优化性能
+    states.push_back(initial_state);      // 第一个状态是初始状态
+
+    State current_state = initial_state;
+
+    for (const auto& control : controls) {
+      // 计算下一个状态
+      State next_state = EvalOneStep(current_state, control, increment, USE_RK);
+      states.push_back(next_state);
+      current_state = next_state;
+    }
+
+    return states;
+  }
+
   State EvalOneStep(const State& x, const Control& u, double increment,
                     int USE_RK = 4) const {
     const State& limited_x = x;
@@ -147,12 +139,6 @@ class Vehicle {
       const State k3 = dynamics(limited_x + 0.5 * increment * k2, limited_u);
       const State k4 = dynamics(limited_x + increment * k3, limited_u);
       next_state = limited_x + (increment / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4);
-      //   std::cout << "k1: " << k1.transpose() << std::endl;
-      //   std::cout << "k2: " << k2.transpose() << std::endl;
-      //   std::cout << "k3: " << k3.transpose() << std::endl;
-      //   std::cout << "k4: " << k4.transpose() << std::endl;
-      //   std::cout << "next_state: " << next_state.transpose() <<
-      //        std::endl;
     }
     return next_state;
   }
@@ -172,6 +158,14 @@ class Vehicle {
     return diff;
   }
 
+  void linearize_seq(const std::vector<State>& reference_trajectory,
+                     double increment, std::vector<Eigen::MatrixXd>& A,
+                     std::vector<Eigen::MatrixXd>& B) {
+    for (size_t i = 0; i < reference_trajectory.size() - 1; ++i) {
+      linearize(reference_trajectory[i], increment, A[i], B[i]);
+    }
+  }
+
   void linearize(const State& x, double increment, Eigen::MatrixXd& A,
                  Eigen::MatrixXd& B) const {
     Eigen::Matrix<double, X_DIM, X_DIM> f_x;
@@ -187,7 +181,7 @@ class Vehicle {
     const double wheel_base = L;
 
     // clang-format off
-    f_x<< 1 , 0, h * cos_theta, -v * h * cos_theta, 0, 0, 0, 0, //x
+    f_x<< 1 , 0, h * cos_theta, -v * h * sin_theta, 0, 0, 0, 0, //x
           0 , 1, h * sin_theta, v * h * cos_theta, 0, 0, 0, 0,    //y
           0 , 0, 1, 0, 0, 0, 0, h, //speed
           0 , 0, h * tan_delta / wheel_base, 1, h * (1 + tan_delta * tan_delta ) * v / wheel_base, 0, 0, 0, //theta
@@ -210,6 +204,140 @@ class Vehicle {
     //    AINFO << "B:" << B;
   }
 
+  // 计算状态变量范围
+  void calculateWeightRange(const State& initial_state, double dt, int horizon,
+                            Eigen::MatrixXd& q_weights,
+                            Eigen::MatrixXd& r_weights) {
+    // 定义极限控制输入组合（最大、最小值）
+    std::vector<Control> control_extremes = {{max_jerk, max_alpha},
+                                             {max_jerk, min_alpha},
+                                             {min_jerk, max_alpha},
+                                             {min_jerk, min_alpha}};
+
+    State min_state = initial_state;
+    State max_state = initial_state;
+
+    // 遍历每种极限控制输入组合
+    for (const auto& control : control_extremes) {
+      State current_state = initial_state;
+
+      for (int i = 0; i < horizon; ++i) {
+        current_state = dynamics(current_state, control);
+
+        // 更新每个状态量的最小值和最大值
+        for (int j = 0; j < X_DIM; ++j) {
+          min_state[j] = std::min(min_state[j], current_state[j]);
+          max_state[j] = std::max(max_state[j], current_state[j]);
+        }
+      }
+    }
+
+    autoTuneQWeights(min_state, max_state, q_weights, r_weights);
+  }
+
+  void autoTuneQWeights(const State& min_state, const State& max_state,
+                        Eigen::MatrixXd& q_weights,
+                        Eigen::MatrixXd& r_weights) {
+    double x_range =
+        max_state[StateIndex::X_POS] - min_state[StateIndex::X_POS];
+    //    double x_range = 10;
+    //    double y_range = 10;
+
+    double y_range =
+        max_state[StateIndex::Y_POS] - min_state[StateIndex::Y_POS];
+    //    double speed_range = max_speed - min_speed;
+    double speed_range =
+        max_state[StateIndex::SPEED] - min_state[StateIndex::SPEED];
+    // 对 theta 进行角度范围的归一化处理
+    double theta_min =
+        std::fmod(min_state[StateIndex::THETA] + M_PI, 2 * M_PI) - M_PI;
+    double theta_max =
+        std::fmod(max_state[StateIndex::THETA] + M_PI, 2 * M_PI) - M_PI;
+    double theta_range = theta_max - theta_min;
+    if (theta_range < 0) theta_range += 2 * M_PI;
+    double delta_range =
+        max_state[StateIndex::DELTAV] - min_state[StateIndex::DELTAV];
+
+    double omega_range =
+        max_state[StateIndex::OMEGA] - min_state[StateIndex::OMEGA];
+    double odom_range =
+        max_state[StateIndex::ODOM] - min_state[StateIndex::ODOM];
+    double accel_range =
+        max_state[StateIndex::ACCEL] - min_state[StateIndex::ACCEL];
+
+    double jerk_range = max_jerk - min_jerk;
+    double alpha_range = max_alpha - min_alpha;
+
+    //    AINFO << "x_range: " << x_range
+    //          << ", max_x: " << max_state[StateIndex::X_POS]
+    //          << ", min_x: " << min_state[StateIndex::X_POS];
+    //    AINFO << "y_range: " << y_range
+    //          << ", max_y: " << max_state[StateIndex::Y_POS]
+    //          << ", min_y: " << min_state[StateIndex::Y_POS];
+    //    AINFO << "speed_range: " << speed_range
+    //          << ", max_speed: " << max_state[StateIndex::SPEED]
+    //          << ", min_speed: " << min_state[StateIndex::SPEED];
+    //    AINFO << "theta_range: " << theta_range
+    //          << ", max_theta: " << max_state[StateIndex::THETA]
+    //          << ", min_theta: " << min_state[StateIndex::THETA];
+    //    AINFO << "delta_range: " << delta_range
+    //          << ", max_delta: " << max_state[StateIndex::DELTAV]
+    //          << ", min_delta: " << min_state[StateIndex::DELTAV];
+    //    AINFO << "omega_range: " << omega_range
+    //          << ", max_omega: " << max_state[StateIndex::OMEGA]
+    //          << ", min_omega: " << min_state[StateIndex::OMEGA];
+    //    AINFO << "odom_range: " << odom_range
+    //          << ", max_odom: " << max_state[StateIndex::ODOM]
+    //          << ", min_odom: " << min_state[StateIndex::ODOM];
+    //    AINFO << "accel_range: " << accel_range
+    //          << ", max_accel: " << max_state[StateIndex::ACCEL]
+    //          << ", min_accel: " << min_state[StateIndex::ACCEL];
+    //    AINFO << "jerk_range: " << jerk_range << ", max_jerk: " << max_jerk
+    //          << ", min_jerk: " << min_jerk;
+    //    AINFO << "alpha_range: " << alpha_range << ", max_alpha: " <<
+    //    max_alpha
+    //          << ", min_alpha: " << min_alpha << '\n';
+
+    // 计算每个状态变量的倒数比例因子，避免除零
+    Eigen::VectorXd q_inv_factors(X_DIM);
+    q_inv_factors[StateIndex::X_POS] = normalize(x_range);
+    q_inv_factors[StateIndex::Y_POS] = normalize(y_range);
+    q_inv_factors[StateIndex::SPEED] = normalize(speed_range);
+    q_inv_factors[StateIndex::THETA] = normalize(theta_range);
+    q_inv_factors[StateIndex::DELTAV] = normalize(delta_range);
+    q_inv_factors[StateIndex::OMEGA] = normalize(omega_range);
+    q_inv_factors[StateIndex::ODOM] = normalize(odom_range);
+    q_inv_factors[StateIndex::ACCEL] = normalize(accel_range);
+    //    std::cout << "q_inv_factors: \n" << q_inv_factors << std::endl;
+
+    Eigen::VectorXd r_inv_factors(U_DIM);
+    r_inv_factors[ControlIndex::JERK] = normalize(jerk_range);
+    r_inv_factors[ControlIndex::ALPHAV] = normalize(alpha_range);
+    //    std::cout << "r_inv_factors: \n" << r_inv_factors << std::endl;
+
+    // 可选：对 Q 权重进行缩放，以便控制整体权重范围
+    for (int i = 0; i < StateIndex::X_DIM; ++i) {
+      q_weights(i, i) *= q_inv_factors[i];
+    }
+    for (int i = 0; i < ControlIndex::U_DIM; ++i) {
+      r_weights(i, i) *= r_inv_factors[i];
+    }
+    //    std::cout << "q_weights: \n" << q_weights << std::endl;
+    //    std::cout << "r_weights: \n" << r_weights << std::endl;
+  }
+
+  double normalize(double value, double c = 1.0) {
+    /*1*/
+    // 避免对数0的问题
+    //    if (value <= 0) {
+    //      return 1.0;  // 对数的最小值，可以根据需要调整
+    //    }
+    //    return std::log(value + c);
+
+    /*2*/
+    return value > 0 ? 1.0 / value : 1.0;
+  }
+
  private:
   double L;  // 车辆轴距
  public:
@@ -223,7 +351,7 @@ class MPC {
   using State = typename Vehicle<StateDim, ControlDim>::State;
   using Control = typename Vehicle<StateDim, ControlDim>::Control;
 
-  MPC(const Vehicle<StateDim, ControlDim>& vehicle, int horizon, double dt,
+  MPC(Vehicle<StateDim, ControlDim>& vehicle, int horizon, double dt,
       Eigen::MatrixXd Q, Eigen::MatrixXd R, Eigen::MatrixXd Q_N)
       : vehicle_(vehicle),
         horizon_(horizon),
@@ -240,7 +368,7 @@ class MPC {
 
     // 初始化状态
     state[0] = initial_state;
-    //    control[0] << 0.0, 0.1;
+    //    control[0] << 0.0, -0.1;
 
     const int num_vars = (StateDim + ControlDim) * (horizon_ - 1);
     const int num_eq_constraints = StateDim * (horizon_ - 1);
@@ -258,13 +386,15 @@ class MPC {
     SetCostFunction(H, g, reference_trajectory);
 
     // 设置初始等式约束
-    Eigen::MatrixXd A_t(StateDim, StateDim);
-    Eigen::MatrixXd B_t(StateDim, ControlDim);
-    vehicle_.linearize(initial_state, dt_, A_t, B_t);
+    std::vector<Eigen::MatrixXd> A_t(horizon_ - 1), B_t(horizon_ - 1);
+    vehicle_.linearize_seq(reference_trajectory, dt_, A_t, B_t);
+    //    vehicle_.calculateWeightRange(initial_state, dt_,
+    //                                  reference_trajectory.size(), Q_, R_);
+
     SetEqualityConstraints(A, b, A_t, B_t, initial_state);
 
     // 设置初始不等式约束
-    SetInequalityConstraints(C, l, u);
+    SetInequalityConstraints(C, l, u, reference_trajectory);
 
     //    // cost function
     //        AINFO << "H dimensions: (" << C.rows() << ", " << C.cols() << ")";
@@ -298,17 +428,17 @@ class MPC {
     //    qp_solver.init(H, g, A, b, C, l, u);
 
     // 调整求解器参数
-    qp_solver.settings.max_iter = 3;
-    qp_solver.settings.max_iter_in = 3;
-    //    qp_solver.settings.eps_abs = 1.E-3;
-    //    qp_solver.settings.verbose = true;
-    //    qp_solver.settings.check_duality_gap = false;
-    //    qp_solver.settings.mu_update_factor = 0.7;
-    //    qp_solver.settings.alpha_bcl = 0.5;
-    //    qp_solver.settings.beta_bcl = 0.5;
-    //    qp_solver.settings.eps_refact = 1.E-3;
-    //    qp_solver.settings.initial_guess =
-    //        InitialGuessStatus::EQUALITY_CONSTRAINED_INITIAL_GUESS;
+    qp_solver.settings.max_iter = 5;
+    qp_solver.settings.max_iter_in = 5;
+    //        qp_solver.settings.eps_abs = 1.E-3;
+    //        qp_solver.settings.verbose = true;
+    //        qp_solver.settings.check_duality_gap = false;
+    //        qp_solver.settings.mu_update_factor = 0.7;
+    //        qp_solver.settings.alpha_bcl = 0.5;
+    //        qp_solver.settings.beta_bcl = 0.5;
+    //        qp_solver.settings.eps_refact = 1.E-3;
+    //        qp_solver.settings.initial_guess =
+    //            InitialGuessStatus::EQUALITY_CONSTRAINED_INITIAL_GUESS;
     auto start = std::chrono::high_resolution_clock::now();
     qp_solver.solve();
     auto end = std::chrono::high_resolution_clock::now();
@@ -332,35 +462,37 @@ class MPC {
     control.back() = control[control.size() - 2];
 
     // 调试信息
-    std::vector<double> objective_values, primal_residuals, dual_residuals;
-    objective_values.push_back(qp_solver.results.info.objValue);
-    primal_residuals.push_back(qp_solver.results.info.pri_res);
-    dual_residuals.push_back(qp_solver.results.info.dua_res);
+    //    std::vector<double> objective_values, primal_residuals,
+    //    dual_residuals;
+    //    objective_values.push_back(qp_solver.results.info.objValue);
+    //    primal_residuals.push_back(qp_solver.results.info.pri_res);
+    //    dual_residuals.push_back(qp_solver.results.info.dua_res);
 
     state_ = state;
     control_ = control;
-    writeDataToCSV(root_path + "debug.csv",
-                   {objective_values, primal_residuals, dual_residuals},
-                   {"objective_value", "primal_residual", "dual_residual"});
-
-    // 保存矩阵 H, g, A, b, C, l, u
-    writeEigenToCSV(root_path + "H.csv", H);
-    writeEigenToCSV(root_path + "g.csv", g);
-    writeEigenToCSV(root_path + "A.csv", A);
-    writeEigenToCSV(root_path + "b.csv", b);
-    writeEigenToCSV(root_path + "C.csv", C);
-    writeEigenToCSV(root_path + "l.csv", l);
-    writeEigenToCSV(root_path + "u.csv", u);
+    //    writeDataToCSV(root_path + "debug.csv",
+    //                   {objective_values, primal_residuals, dual_residuals},
+    //                   {"objective_value", "primal_residual",
+    //                   "dual_residual"});
+    //
+    //    // 保存矩阵 H, g, A, b, C, l, u
+    //    writeEigenToCSV(root_path + "H.csv", H);
+    //    writeEigenToCSV(root_path + "g.csv", g);
+    //    writeEigenToCSV(root_path + "A.csv", A);
+    //    writeEigenToCSV(root_path + "b.csv", b);
+    //    writeEigenToCSV(root_path + "C.csv", C);
+    //    writeEigenToCSV(root_path + "l.csv", l);
+    //    writeEigenToCSV(root_path + "u.csv", u);
 
     //    AINFO << "MPC solve complete";
     return control;
   }
 
-  const std::vector<State>& getState() const { return state_; }
+  std::vector<State> getState() const { return state_; }
   const std::vector<Control>& getControl() const { return control_; }
 
  private:
-  const Vehicle<StateDim, ControlDim>& vehicle_;
+  Vehicle<StateDim, ControlDim>& vehicle_;
   int horizon_;
   double dt_;
   std::vector<State> state_;
@@ -368,7 +500,7 @@ class MPC {
 
   Eigen::MatrixXd Q_, R_, Q_N_;
 
-
+ private:
   void SetCostFunction(Eigen::MatrixXd& H, Eigen::VectorXd& g,
                        const std::vector<State>& reference_trajectory) {
     int num_rows = (StateDim + ControlDim) * (horizon_ - 1);
@@ -405,8 +537,8 @@ class MPC {
   }
 
   void SetEqualityConstraints(Eigen::MatrixXd& A, Eigen::VectorXd& b,
-                              const Eigen::MatrixXd& A_t,
-                              const Eigen::MatrixXd& B_t,
+                              const std::vector<Eigen::MatrixXd>& A_t,
+                              const std::vector<Eigen::MatrixXd>& B_t,
                               const Eigen::VectorXd& x0) {
     int num_eq_constraints = StateDim * (horizon_ - 1);
     int a_cols = (ControlDim + StateDim) * (horizon_ - 1);
@@ -417,27 +549,30 @@ class MPC {
 
     Eigen::MatrixXd B_I =
         Eigen::MatrixXd::Zero(StateDim, StateDim + ControlDim);
-    B_I.block(0, 0, StateDim, ControlDim) = B_t;
     B_I.block(0, ControlDim, StateDim, StateDim) = -I;
 
     for (int i = 0; i < horizon_ - 1; ++i) {
+      B_I.block(0, 0, StateDim, ControlDim) = B_t[i];
       if (i == 0) {
         A.block(0, 0, StateDim, StateDim + ControlDim) = B_I;
       } else {
         A.block(i * StateDim, i * (StateDim + ControlDim) - StateDim, StateDim,
-                StateDim) = A_t;
+                StateDim) = A_t[i];
         A.block(i * StateDim, i * (StateDim + ControlDim), StateDim,
                 StateDim + ControlDim) = B_I;
       }
+      //      std::cout << "B_I: \n" << B_I << std::endl;
+      //      std::cout << "A_t: \n" << A_t[i] << std::endl;
     }
 
-    b.head(StateDim) = -A_t * x0;
-    ADEBUG << "Equality constraint matrix A:\n" << A;
-    ADEBUG << "Equality constraint vector b:\n" << b;
+    b.head(StateDim) = -A_t.front() * x0;
+    //    ADEBUG << "Equality constraint matrix A:\n" << A;
+    //    ADEBUG << "Equality constraint vector b:\n" << b;
   }
 
-  void SetInequalityConstraints(Eigen::MatrixXd& C, Eigen::VectorXd& l,
-                                Eigen::VectorXd& u) {
+  void SetInequalityConstraints(
+      Eigen::MatrixXd& C, Eigen::VectorXd& l, Eigen::VectorXd& u,
+      const std::vector<State>& reference_trajectory) {
     int num_in_constraints = (StateDim + ControlDim) * (horizon_ - 1);
 
     C = Eigen::MatrixXd::Identity(num_in_constraints, num_in_constraints);
@@ -462,9 +597,11 @@ class MPC {
     // State bounds
     Eigen::VectorXd MIN_X(StateDim);
     MIN_X << -inf, -inf, min_v, -inf, min_delta, -inf, -inf, min_a;
+    //    MIN_X << -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf;
 
     Eigen::VectorXd MAX_X(StateDim);
     MAX_X << inf, inf, max_v, inf, max_delta, inf, inf, max_a;
+    //    MAX_X << inf, inf, inf, inf, inf, inf, inf, inf;
 
     // Control bounds
     Eigen::VectorXd MIN_U(ControlDim);
@@ -497,16 +634,16 @@ class MPC {
       u.segment(start_idx, StateDim + ControlDim) = u_block;
     }
 
-    ADEBUG << "Inequality constraint matrix C:\n" << C;
-    ADEBUG << "Inequality lower bound vector l:\n" << l;
-    ADEBUG << "Inequality upper bound vector u:\n" << u;
+    //    ADEBUG << "Inequality constraint matrix C:\n" << C;
+    //    ADEBUG << "Inequality lower bound vector l:\n" << l;
+    //    ADEBUG << "Inequality upper bound vector u:\n" << u;
   }
 
   void UpdateEqualityConstraints(const Eigen::MatrixXd& A_t,
                                  const Eigen::VectorXd& x0,
                                  Eigen::VectorXd& b) {
     b.head(StateDim) = -A_t * x0;
-    ADEBUG << "Equality constraint vector b:\n" << b;
+    //    ADEBUG << "Equality constraint vector b:\n" << b;
   }
   void UpdateInequalityConstraints(Eigen::VectorXd& l, Eigen::VectorXd& u,
                                    const State& state, const Control& control) {
@@ -603,6 +740,110 @@ void loadTrajectoryFromCSV(
     ++i;  // 更新索引
   }
 }
+template <int StateDim, int ControlDim>
+void normalizeTrajectory(
+    std::vector<typename Vehicle<StateDim, ControlDim>::State>& trajectory) {
+  // 获取起始点
+  double x_start = trajectory.front()[Vehicle<StateDim, ControlDim>::X_POS];
+  double y_start = trajectory.front()[Vehicle<StateDim, ControlDim>::Y_POS];
+  double theta_start = trajectory.front()[Vehicle<StateDim, ControlDim>::THETA];
+
+  // 预计算sin和cos值以避免重复计算
+  double cos_theta_start = cos(theta_start);
+  double sin_theta_start = sin(theta_start);
+
+  // 遍历轨迹，进行坐标变换和平移
+  for (auto& point : trajectory) {
+    // 计算相对于起点的坐标差值
+    double dx = point[Vehicle<StateDim, ControlDim>::X_POS] - x_start;
+    double dy = point[Vehicle<StateDim, ControlDim>::Y_POS] - y_start;
+
+    // 更新坐标，执行旋转变换
+    point[Vehicle<StateDim, ControlDim>::X_POS] =
+        dx * cos_theta_start + dy * sin_theta_start;
+    point[Vehicle<StateDim, ControlDim>::Y_POS] =
+        -dx * sin_theta_start + dy * cos_theta_start;
+
+    // 更新航向角
+    point[Vehicle<StateDim, ControlDim>::THETA] -= theta_start;
+
+    //    // 归一化航向角到[-π, π]范围
+    //    point[Vehicle<StateDim, ControlDim>::THETA] =
+    //        std::fmod(point[Vehicle<StateDim, ControlDim>::THETA] + M_PI, 2 *
+    //        M_PI);
+    //
+    //    // 如果theta大于π，则减去2π，确保在[-π, π]范围内
+    //    if (point[Vehicle<StateDim, ControlDim>::THETA] > M_PI) {
+    //      point[Vehicle<StateDim, ControlDim>::THETA] -= 2 * M_PI;
+    //    }
+  }
+
+  //  for (const auto& point : trajectory) {
+  //    std::cout << "x: " << point(Vehicle<StateDim, ControlDim>::X_POS)
+  //              << " y: " << point(Vehicle<StateDim, ControlDim>::Y_POS)
+  //              << ", speed: " << point(Vehicle<StateDim, ControlDim>::SPEED)
+  //              << ", theta: " << point(Vehicle<StateDim, ControlDim>::THETA)
+  //              << ", deltav: " << point(Vehicle<StateDim,
+  //              ControlDim>::DELTAV)
+  //              << ", omega: " << point(Vehicle<StateDim, ControlDim>::OMEGA)
+  //              << ", odom: " << point(Vehicle<StateDim, ControlDim>::ODOM)
+  //              << ", accel: " << point(Vehicle<StateDim, ControlDim>::ACCEL)
+  //              << std::endl;
+  //  }
+}
+
+template <int StateDim, int ControlDim>
+void undoRotation(
+    std::vector<typename Vehicle<StateDim, ControlDim>::State>& trajectory,
+    const typename Vehicle<StateDim, ControlDim>::State& start_point) {
+  // 获取传入的起始点
+  double x_start = start_point[Vehicle<StateDim, ControlDim>::X_POS];
+  double y_start = start_point[Vehicle<StateDim, ControlDim>::Y_POS];
+  double theta_start = start_point[Vehicle<StateDim, ControlDim>::THETA];
+
+  // 预计算sin和cos值以避免重复计算
+  double cos_theta_start = cos(theta_start);
+  double sin_theta_start = sin(theta_start);
+
+  // 遍历轨迹，进行逆旋转
+  for (auto& point : trajectory) {
+    // 先恢复旋转后的坐标
+    double x_prime = point[Vehicle<StateDim, ControlDim>::X_POS];
+    double y_prime = point[Vehicle<StateDim, ControlDim>::Y_POS];
+
+    // 逆旋转恢复坐标
+    point[Vehicle<StateDim, ControlDim>::X_POS] =
+        x_prime * cos_theta_start - y_prime * sin_theta_start + x_start;
+    point[Vehicle<StateDim, ControlDim>::Y_POS] =
+        x_prime * sin_theta_start + y_prime * cos_theta_start + y_start;
+
+    // 恢复theta
+    point[Vehicle<StateDim, ControlDim>::THETA] += theta_start;
+
+    //    // 归一化theta到[-π, π]范围
+    //    point[Vehicle<StateDim, ControlDim>::THETA] =
+    //        std::fmod(point[Vehicle<StateDim, ControlDim>::THETA] + M_PI, 2 *
+    //        M_PI);
+    //
+    //    if (point[Vehicle<StateDim, ControlDim>::THETA] > M_PI) {
+    //      point[Vehicle<StateDim, ControlDim>::THETA] -= 2 * M_PI;
+    //    }
+  }
+
+  //  for (const auto& point : trajectory) {
+  //    std::cout << "x: " << point(Vehicle<StateDim, ControlDim>::X_POS)
+  //              << " y: " << point(Vehicle<StateDim, ControlDim>::Y_POS)
+  //              << ", speed: " << point(Vehicle<StateDim, ControlDim>::SPEED)
+  //              << ", theta: " << point(Vehicle<StateDim, ControlDim>::THETA)
+  //              << ", deltav: " << point(Vehicle<StateDim,
+  //              ControlDim>::DELTAV)
+  //              << ", omega: " << point(Vehicle<StateDim, ControlDim>::OMEGA)
+  //              << ", odom: " << point(Vehicle<StateDim, ControlDim>::ODOM)
+  //              << ", accel: " << point(Vehicle<StateDim, ControlDim>::ACCEL)
+  //              << std::endl;
+  //  }
+  std::cout << std::endl;
+}
 
 int main() {
   // 读取JSON文件
@@ -652,14 +893,12 @@ int main() {
 
   std::vector<Vehicle<StateDim, ControlDim>::State> targetTrajectory(
       horizon, initial_state);
-
-  loadTrajectoryFromCSV<StateDim, ControlDim>(
-      targetTrajectory,
-      "/home/next/demo_test/Optimal_Control_test/Convex_mpc/trajectory.csv");
-
-  //  for (const auto& item: targetTrajectory) {
-  //    std::cout << "x: " <<item[0] << ", y:" << item[1] << std::endl;
-  //  }
+  //  initial_state(Vehicle<StateDim, ControlDim>::X_POS) = 326063.187;
+  //  initial_state(Vehicle<StateDim, ControlDim>::Y_POS) = 3353106.462;
+  loadTrajectoryFromCSV<StateDim, ControlDim>(targetTrajectory, row_traj_path);
+  auto start_point = targetTrajectory.front();
+  auto old_traj = targetTrajectory;
+  normalizeTrajectory<StateDim, ControlDim>(targetTrajectory);
 
   auto start = std::chrono::high_resolution_clock::now();
 
@@ -671,23 +910,35 @@ int main() {
   std::cout << std::fixed << std::setprecision(6)
             << "All MPC solve time: " << duration.count() << " ms" << std::endl;
   // 提取轨迹
-  const auto& trajectory = mpc.getState();
-  const auto& control_inputs = mpc.getControl();
+  auto trajectory = mpc.getState();
+  auto& control_inputs = mpc.getControl();
+  //  std::cout << "start_point: " << start_point << std::endl;
+  auto dyn_traj = vehicle.simulate(trajectory.front(), control_inputs, dt);
+
+  undoRotation<StateDim, ControlDim>(trajectory, start_point);
+  undoRotation<StateDim, ControlDim>(targetTrajectory, start_point);
+  undoRotation<StateDim, ControlDim>(dyn_traj, start_point);
 
   // 提取轨迹中的X和Y坐标
   std::vector<double> x_ref, y_ref, x_coords, y_coords, v_coords, theta_coords,
-      acc_coords, steering_coords;
-  for (const auto& state : targetTrajectory) {
-    x_ref.push_back(state(Vehicle<StateDim, ControlDim>::X_POS));
-    y_ref.push_back(state(Vehicle<StateDim, ControlDim>::Y_POS));
+      acc_coords, steering_coords, omega_coords, odom_coords;
+  for (const auto& state : old_traj) {
+    x_ref.push_back(state(Vehicle<StateDim, ControlDim>::X_POS) -
+                    start_point(Vehicle<StateDim, ControlDim>::X_POS));
+    y_ref.push_back(state(Vehicle<StateDim, ControlDim>::Y_POS) -
+                    start_point(Vehicle<StateDim, ControlDim>::Y_POS));
   }
   for (const auto& state : trajectory) {
-    x_coords.push_back(state(Vehicle<StateDim, ControlDim>::X_POS));
-    y_coords.push_back(state(Vehicle<StateDim, ControlDim>::Y_POS));
-    theta_coords.push_back(state(Vehicle<StateDim, ControlDim>::THETA));
+    x_coords.push_back(state(Vehicle<StateDim, ControlDim>::X_POS) -
+                       start_point(Vehicle<StateDim, ControlDim>::X_POS));
+    y_coords.push_back(state(Vehicle<StateDim, ControlDim>::Y_POS) -
+                       start_point(Vehicle<StateDim, ControlDim>::Y_POS));
     v_coords.push_back(state(Vehicle<StateDim, ControlDim>::SPEED));
-    acc_coords.push_back(state(Vehicle<StateDim, ControlDim>::ACCEL));
+    theta_coords.push_back(state(Vehicle<StateDim, ControlDim>::THETA));
     steering_coords.push_back(state(Vehicle<StateDim, ControlDim>::DELTAV));
+    omega_coords.push_back(state(Vehicle<StateDim, ControlDim>::OMEGA));
+    odom_coords.push_back(state(Vehicle<StateDim, ControlDim>::ODOM));
+    acc_coords.push_back(state(Vehicle<StateDim, ControlDim>::ACCEL));
   }
   // 提取控制量中的A和DELTA
   std::vector<double> jerk_values, alpha_values;
@@ -698,44 +949,24 @@ int main() {
 
   // 控制量反推轨迹
   std::vector<double> dynamic_traj_x, dynamic_traj_y;
-  std::vector<Vehicle<StateDim, ControlDim>::State> dynamic_traj;
-  dynamic_traj.push_back(targetTrajectory.front());
-  dynamic_traj_x.push_back(
-      dynamic_traj.back()[Vehicle<StateDim, ControlDim>::X_POS]);
-  dynamic_traj_y.push_back(
-      dynamic_traj.back()[Vehicle<StateDim, ControlDim>::Y_POS]);
-  for (int i = 0; i < control_inputs.size(); ++i) {
-    dynamic_traj.push_back(
-        vehicle.EvalOneStep(dynamic_traj.back(), control_inputs[i], dt));
 
-    dynamic_traj_x.push_back(
-        dynamic_traj.back()[Vehicle<StateDim, ControlDim>::X_POS]);
-
-    dynamic_traj_y.push_back(
-        dynamic_traj.back()[Vehicle<StateDim, ControlDim>::Y_POS]);
-
-    std::cout << "i: " << i << ", opt_x: "
-              << trajectory[i][Vehicle<StateDim, ControlDim>::X_POS]
-              << ", opt_y: "
-              << trajectory[i][Vehicle<StateDim, ControlDim>::Y_POS]
-              << ", opt_theta: "
-              << trajectory[i][Vehicle<StateDim, ControlDim>::THETA]
-              << ", x_dyn: " << dynamic_traj_x[i]
-              << ", y_dyn: " << dynamic_traj_y[i] << " | jerk: "
-              << control_inputs[i][Vehicle<StateDim, ControlDim>::JERK]
-              << ", alpha: "
-              << control_inputs[i][Vehicle<StateDim, ControlDim>::ALPHAV]
-              << std::endl;
+  for (const auto& state : dyn_traj) {
+    dynamic_traj_x.push_back(state(Vehicle<StateDim, ControlDim>::X_POS) -
+                             start_point(Vehicle<StateDim, ControlDim>::X_POS));
+    dynamic_traj_y.push_back(state(Vehicle<StateDim, ControlDim>::Y_POS) -
+                             start_point(Vehicle<StateDim, ControlDim>::Y_POS));
   }
 
   // 将所有数据写入一个CSV文件
-  writeDataToCSV(root_path + "data.csv",
-                 {x_ref, y_ref, x_coords, y_coords, dynamic_traj_x,
-                  dynamic_traj_y, v_coords, acc_coords, theta_coords,
-                  steering_coords, jerk_values, alpha_values},
-                 {"x_ref", "y_ref", "x_coords", "y_coords", "dynamic_traj_x",
-                  "dynamic_traj_y", "velocity", "acc", "theta", "steering",
-                  "d(aa)_jerk", "dd(steering)_alpha"});
+  writeDataToCSV(
+      root_path + "data.csv",
+      {x_ref, y_ref, x_coords, y_coords, v_coords, theta_coords, acc_coords,
+       steering_coords, omega_coords, odom_coords, jerk_values, alpha_values,
+       dynamic_traj_x, dynamic_traj_y},
+      {"x_ref", "y_ref", "x_coords", "y_coords", "v_coords", "theta_coords",
+       "acc_coords", "steering_coords", "omega_coords", "odom_coords",
+       "jerk_values", "alpha_values", "dynamic_traj_x", "dynamic_traj_y"});
+
   return 0;
 }
 

@@ -1,0 +1,1 @@
+/usr/bin/c++ -g CMakeFiles/cal_singmod_a.dir/cal_singmod_a.cpp.o -o cal_singmod_a

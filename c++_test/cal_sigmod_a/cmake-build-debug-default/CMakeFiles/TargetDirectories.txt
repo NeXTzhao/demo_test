@@ -1,0 +1,3 @@
+/home/next/要备份的/demo_test/c++_test/cal_sigmod_a/cmake-build-debug-default/CMakeFiles/cal_singmod_a.dir
+/home/next/要备份的/demo_test/c++_test/cal_sigmod_a/cmake-build-debug-default/CMakeFiles/edit_cache.dir
+/home/next/要备份的/demo_test/c++_test/cal_sigmod_a/cmake-build-debug-default/CMakeFiles/rebuild_cache.dir

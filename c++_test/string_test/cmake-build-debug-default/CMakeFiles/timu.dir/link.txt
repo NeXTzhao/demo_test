@@ -1,0 +1,1 @@
+/usr/bin/c++ -g CMakeFiles/timu.dir/timu.cpp.o -o timu

@@ -21,7 +21,7 @@ def bezier_curve(control_points, num_points=35):
 def generate_extreme_trajectory(num_points=35, deceleration_type='linear'):
 	control_points = np.array([
 		# [0, 0], [50, 50], [100, 0]]
-		[0, 0], [10, 0], [20, 0], [20, 5], [30, 5], [40, 5]]
+		[0, 0], [10, 0], [20, 5], [20, 5], [30, 5], [40, 0]]
 	)
 
 	trajectory = bezier_curve(control_points, num_points=num_points)
@@ -89,6 +89,7 @@ plt.scatter(extreme_trajectory['X_POS'], extreme_trajectory['Y_POS'], color='red
 plt.title('Extreme Trajectory Path with Lane Change')
 plt.xlabel('X Position (m)')
 plt.ylabel('Y Position (m)')
+plt.axis('equal')
 plt.grid()
 plt.legend()
 plt.show()

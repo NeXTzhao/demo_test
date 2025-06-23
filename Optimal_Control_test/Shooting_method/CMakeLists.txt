@@ -15,7 +15,6 @@ add_definitions(-DPLANNING_DEBUG=${PLANNING_DEBUG})
 
 find_package(Python3 COMPONENTS Interpreter Development NumPy REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(glog REQUIRED)
 
 add_executable(sparse_matrix sparse_matrix.cpp)
 target_link_libraries(sparse_matrix
@@ -34,4 +33,4 @@ target_link_libraries(shooting_method
 		Python3::Python
 		Python3::NumPy
 		Eigen3::Eigen
-		glog::glog)
+)

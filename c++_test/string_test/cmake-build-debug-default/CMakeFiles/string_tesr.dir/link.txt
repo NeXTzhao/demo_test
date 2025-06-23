@@ -1,0 +1,1 @@
+/usr/bin/c++ -g CMakeFiles/string_tesr.dir/string_tesr.cpp.o -o string_tesr

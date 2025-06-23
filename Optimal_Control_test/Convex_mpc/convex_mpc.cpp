@@ -13,8 +13,10 @@ using json = nlohmann::json;
 using namespace proxsuite::proxqp;
 
 const std::string root_path =
-    "/home/next/demo_test/Optimal_Control_test/Convex_mpc/data/";
-
+    "/home/next/要备份的/demo_test/Optimal_Control_test/Convex_mpc/data/";
+const std::string row_traj_path =
+    "/home/next/要备份的/demo_test/Optimal_Control_test/Convex_mpc/"
+    "trajectory.csv";
 // 写入数据到CSV文件的函数
 void writeDataToCSV(const std::string& filename,
                     const std::vector<std::vector<double>>& data,
@@ -220,29 +222,30 @@ class MPC {
     // 设置初始不等式约束
     SetInequalityConstraints(C, l, u);
 
-//    // cost function
-//    AINFO << "H dimensions: (" << C.rows() << ", " << C.cols() << ")";
-//    AINFO << "g dimensions: (" << g.rows() << ", " << g.cols() << ")";
-//    // dynamic function
-//    AINFO << "A_t dimensions: (" << A_t.rows() << ", " << A_t.cols() << ")";
-//    AINFO << "B_t dimensions: (" << B_t.rows() << ", " << B_t.cols() << ")";
-//    // equality constraints
-//    AINFO << "A dimensions: (" << A.rows() << ", " << A.cols() << ")";
-//    AINFO << "b dimensions: (" << b.rows() << ", " << b.cols() << ")";
-//    // inequality constraints
-//    AINFO << "C dimensions: (" << C.rows() << ", " << C.cols() << ")";
-//    AINFO << "l dimensions: (" << l.rows() << ", " << l.cols() << ")";
-//    AINFO << "u dimensions: (" << u.rows() << ", " << u.cols() << ")";
-//
-//    AINFO << "Initializing and solving QP problem";
+    //    // cost function
+    //    AINFO << "H dimensions: (" << C.rows() << ", " << C.cols() << ")";
+    //    AINFO << "g dimensions: (" << g.rows() << ", " << g.cols() << ")";
+    //    // dynamic function
+    //    AINFO << "A_t dimensions: (" << A_t.rows() << ", " << A_t.cols() <<
+    //    ")"; AINFO << "B_t dimensions: (" << B_t.rows() << ", " << B_t.cols()
+    //    << ")";
+    //    // equality constraints
+    //    AINFO << "A dimensions: (" << A.rows() << ", " << A.cols() << ")";
+    //    AINFO << "b dimensions: (" << b.rows() << ", " << b.cols() << ")";
+    //    // inequality constraints
+    //    AINFO << "C dimensions: (" << C.rows() << ", " << C.cols() << ")";
+    //    AINFO << "l dimensions: (" << l.rows() << ", " << l.cols() << ")";
+    //    AINFO << "u dimensions: (" << u.rows() << ", " << u.cols() << ")";
+    //
+    //    AINFO << "Initializing and solving QP problem";
     dense::QP<double> qp_solver(num_vars, num_eq_constraints,
                                 num_in_constraints);
     qp_solver.init(H, g, A, b, C, l, u);
 
     // 调整求解器参数
-//    qp_solver.settings.max_iter = 1;
-//    qp_solver.settings.max_iter_in = 1;
-//    qp_solver.settings.eps_abs = 1.E-3;
+    //    qp_solver.settings.max_iter = 1;
+    //    qp_solver.settings.max_iter_in = 1;
+    //    qp_solver.settings.eps_abs = 1.E-3;
     qp_solver.settings.verbose = true;
     auto start = std::chrono::high_resolution_clock::now();
     qp_solver.solve();
@@ -252,7 +255,7 @@ class MPC {
 
     Eigen::VectorXd solution = qp_solver.results.x;
 
-//    AINFO << "X: \n" << solution;
+    //    AINFO << "X: \n" << solution;
     for (int i = 0; i < horizon_ - 1; ++i) {
       if (i == 0) {
         control[i + 1] = solution.segment(0, ControlDim);
@@ -266,30 +269,32 @@ class MPC {
     control.back() = control[control.size() - 2];
 
     // 调试信息
-//    std::vector<double> objective_values, primal_residuals, dual_residuals;
-//    objective_values.push_back(qp_solver.results.info.objValue);
-//    primal_residuals.push_back(qp_solver.results.info.pri_res);
-//    dual_residuals.push_back(qp_solver.results.info.dua_res);
+    //    std::vector<double> objective_values, primal_residuals,
+    //    dual_residuals;
+    //    objective_values.push_back(qp_solver.results.info.objValue);
+    //    primal_residuals.push_back(qp_solver.results.info.pri_res);
+    //    dual_residuals.push_back(qp_solver.results.info.dua_res);
 
     state_ = state;
-//    writeDataToCSV(root_path + "debug.csv",
-//                   {objective_values, primal_residuals, dual_residuals},
-//                   {"objective_value", "primal_residual", "dual_residual"});
+    //    writeDataToCSV(root_path + "debug.csv",
+    //                   {objective_values, primal_residuals, dual_residuals},
+    //                   {"objective_value", "primal_residual",
+    //                   "dual_residual"});
 
     // 保存矩阵 H, g, A, b, C, l, u
-//    writeEigenToCSV(root_path + "H.csv", H);
-//    writeEigenToCSV(root_path + "g.csv", g);
-//    writeEigenToCSV(root_path + "A.csv", A);
-//    writeEigenToCSV(root_path + "b.csv", b);
-//    writeEigenToCSV(root_path + "C.csv", C);
-//    writeEigenToCSV(root_path + "l.csv", l);
-//    writeEigenToCSV(root_path + "u.csv", u);
+    //    writeEigenToCSV(root_path + "H.csv", H);
+    //    writeEigenToCSV(root_path + "g.csv", g);
+    //    writeEigenToCSV(root_path + "A.csv", A);
+    //    writeEigenToCSV(root_path + "b.csv", b);
+    //    writeEigenToCSV(root_path + "C.csv", C);
+    //    writeEigenToCSV(root_path + "l.csv", l);
+    //    writeEigenToCSV(root_path + "u.csv", u);
 
-//    AINFO << "MPC solve complete";
+    //    AINFO << "MPC solve complete";
     return control;
   }
 
-  const std::vector<State>& getState() const { return state_; }
+  const std::vector<State> getState() const { return state_; }
 
  private:
   const Vehicle<StateDim, ControlDim>& vehicle_;
@@ -297,7 +302,7 @@ class MPC {
   double dt_;
   std::vector<State> state_;
   Eigen::MatrixXd R_, Q_N_;
-  Eigen::Map<Eigen::Matrix<double, 8, 1>> Q_;
+  Eigen::MatrixXd Q_;
 
   void SetCostFunction(Eigen::MatrixXd& H, Eigen::VectorXd& g,
                        const std::vector<State>& reference_trajectory) {
@@ -477,32 +482,35 @@ class MPC {
 };
 
 template <size_t StateDim, size_t ControlDim>
-void loadTrajectoryFromCSV(std::vector<typename Vehicle<StateDim, ControlDim>::State>& targetTrajectory, const std::string& filename) {
+void loadTrajectoryFromCSV(
+    std::vector<typename Vehicle<StateDim, ControlDim>::State>&
+        targetTrajectory,
+    const std::string& filename) {
   std::ifstream file(filename);
   std::string line;
 
   // 跳过表头
   std::getline(file, line);
 
-  size_t i = 0; // 索引
+  size_t i = 0;  // 索引
   while (std::getline(file, line) && i < targetTrajectory.size()) {
     std::stringstream ss(line);
     std::string item;
 
     // 读取并解析每一列的数据
-    std::getline(ss, item, ','); // x
+    std::getline(ss, item, ',');  // x
     targetTrajectory[i][Vehicle<StateDim, ControlDim>::X] = std::stod(item);
 
-    std::getline(ss, item, ','); // y
+    std::getline(ss, item, ',');  // y
     targetTrajectory[i][Vehicle<StateDim, ControlDim>::Y] = std::stod(item);
 
-    std::getline(ss, item, ','); // theta
+    std::getline(ss, item, ',');  // theta
     targetTrajectory[i][Vehicle<StateDim, ControlDim>::THETA] = std::stod(item);
 
-    std::getline(ss, item, ','); // v
+    std::getline(ss, item, ',');  // v
     targetTrajectory[i][Vehicle<StateDim, ControlDim>::V] = std::stod(item);
 
-    ++i; // 更新索引
+    ++i;  // 更新索引
   }
 }
 
@@ -545,34 +553,8 @@ int main() {
 
   std::vector<Vehicle<StateDim, ControlDim>::State> targetTrajectory(
       horizon, initial_state);
-  // 设置参考轨迹为简单的直线
-//  for (int i = 0; i < horizon; ++i) {
-//    double t = i;
-//    targetTrajectory[i](Vehicle<StateDim, ControlDim>::X) = t;
-//    targetTrajectory[i](Vehicle<StateDim, ControlDim>::Y) =  1 * (sin(t / 1) + cos(t / 1));
-////    targetTrajectory[i](Vehicle<StateDim, ControlDim>::THETA) = 0.79;
-//    targetTrajectory[i](Vehicle<StateDim, ControlDim>::V) = j["ref"][3];
-//  }
-//
-//  for (int i = 0; i < horizon; i++) {
-//    double dx, dy, ddx, ddy;
-//    if (i == 0) {
-//      dx = targetTrajectory[i + 1](Vehicle<StateDim, ControlDim>::X) - targetTrajectory[i](Vehicle<StateDim, ControlDim>::X);
-//      dy = targetTrajectory[i + 1](Vehicle<StateDim, ControlDim>::Y) - targetTrajectory[i](Vehicle<StateDim, ControlDim>::Y);
-//    } else if (i == horizon - 1) {
-//      dx = targetTrajectory[i](Vehicle<StateDim, ControlDim>::X) - targetTrajectory[i - 1](Vehicle<StateDim, ControlDim>::X) ;
-//      dy = targetTrajectory[i](Vehicle<StateDim, ControlDim>::Y) -  targetTrajectory[i - 1](Vehicle<StateDim, ControlDim>::Y);
-//    } else {
-//      dx = targetTrajectory[i+1](Vehicle<StateDim, ControlDim>::X) - targetTrajectory[i](Vehicle<StateDim, ControlDim>::X);
-//      dy = targetTrajectory[i+1](Vehicle<StateDim, ControlDim>::Y) - targetTrajectory[i](Vehicle<StateDim, ControlDim>::Y);
-//    }
-//    targetTrajectory[i](Vehicle<StateDim, ControlDim>::THETA)  = atan2(dy, dx); // yaw
-//    //计算曲率:设曲线r(t) =(x(t),y(t)),则曲率k=(x'y" - x"y')/((x')^2 +
-//    //(y')^2)^(3/2).
-//    //参考：https://blog.csdn.net/weixin_46627433/article/details/123403726
-//  }
 
-  loadTrajectoryFromCSV<StateDim, ControlDim>(targetTrajectory, "/home/next/demo_test/Optimal_Control_test/Convex_mpc/trajectory.csv");
+  loadTrajectoryFromCSV<StateDim, ControlDim>(targetTrajectory, row_traj_path);
 
   auto start = std::chrono::high_resolution_clock::now();
 

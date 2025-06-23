@@ -1,0 +1,4 @@
+/home/next/要备份的/demo_test/c++_test/string_test/cmake-build-debug-default/CMakeFiles/string_tesr.dir
+/home/next/要备份的/demo_test/c++_test/string_test/cmake-build-debug-default/CMakeFiles/timu.dir
+/home/next/要备份的/demo_test/c++_test/string_test/cmake-build-debug-default/CMakeFiles/edit_cache.dir
+/home/next/要备份的/demo_test/c++_test/string_test/cmake-build-debug-default/CMakeFiles/rebuild_cache.dir

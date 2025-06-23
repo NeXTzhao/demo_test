@@ -1,0 +1,4 @@
+/home/next/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" -S /home/next/要备份的/demo_test/c++_test/cal_sigmod_a -B /home/next/要备份的/demo_test/c++_test/cal_sigmod_a/cmake-build-debug-default
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/next/要备份的/demo_test/c++_test/cal_sigmod_a/cmake-build-debug-default

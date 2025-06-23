@@ -8,6 +8,9 @@ import numpy as np
 data_df = pd.read_csv('data/data.csv')
 debug_df = pd.read_csv('data/debug.csv')
 
+# 设置页面配置，调整页面宽度
+st.set_page_config(layout="wide")
+
 # 可视化轨迹
 st.title('Vehicle Trajectory')
 
@@ -37,6 +40,25 @@ def get_vehicle_corners(x, y, theta):
 		y + (vehicle_length / 2) * np.sin(theta) + (vehicle_width / 2) * np.cos(theta)
 	]
 	return corners_x, corners_y
+
+# 绘制车辆方向
+def plot_vehicle_direction(x, y, theta):
+	# 箭头的长度和方向
+	arrow_length = 0.6  # 箭头长度
+	arrow_x = [x, x + arrow_length * np.cos(theta)]
+	arrow_y = [y, y + arrow_length * np.sin(theta)]
+
+	# 箭头的尖端
+	arrowhead_x = x + arrow_length * np.cos(theta) * 0.8
+	arrowhead_y = y + arrow_length * np.sin(theta) * 0.8
+
+	# 创建箭头的两条边，构成箭头尖
+	arrowhead_x2 = arrowhead_x + 0.1 * np.cos(theta + np.pi / 4)
+	arrowhead_y2 = arrowhead_y + 0.1 * np.sin(theta + np.pi / 4)
+	arrowhead_x3 = arrowhead_x + 0.1 * np.cos(theta - np.pi / 4)
+	arrowhead_y3 = arrowhead_y + 0.1 * np.sin(theta - np.pi / 4)
+
+	return arrow_x, arrow_y, [arrowhead_x, arrowhead_y, arrowhead_x2, arrowhead_y2, arrowhead_x3, arrowhead_y3]
 
 
 # 绘制2D视图
@@ -98,8 +120,11 @@ def plot_2d():
 		hoverinfo='text'  # 只显示文本（索引、速度、theta等）
 	))
 
+
 	for i in range(len(data_df)):
-		corners_x, corners_y = get_vehicle_corners(data_df['x_coords'][i], data_df['y_coords'][i], data_df['theta'][i])
+		# 获取车辆四角坐标
+		corners_x, corners_y = get_vehicle_corners(data_df['x_coords'][i], data_df['y_coords'][i], data_df['theta_coords'][i])
+		# 绘制车辆
 		fig.add_trace(go.Scatter(
 			x=corners_x,
 			y=corners_y,
@@ -108,28 +133,133 @@ def plot_2d():
 			showlegend=False
 		))
 
+		# 车辆方向箭头
+		arrow_length = 0.6  # 箭头长度
+		arrow_x = [data_df['x_coords'][i], data_df['x_coords'][i] + arrow_length * np.cos(data_df['theta_coords'][i])]
+		arrow_y = [data_df['y_coords'][i], data_df['y_coords'][i] + arrow_length * np.sin(data_df['theta_coords'][i])]
+
+		# 绘制箭头线
+		fig.add_trace(go.Scatter(
+			x=arrow_x,
+			y=arrow_y,
+			mode='lines',
+			line=dict(color='red', width=4, dash='solid'),  # 红色箭头，宽度稍微加粗，实线
+			showlegend=False
+		))
+
+		# 绘制箭头的尖端
+		arrowhead_length = 0.2  # 尖端长度
+		arrowhead_angle = np.pi / 6  # 尖端角度
+
+		# 箭头尖端两个点
+		head_x1 = arrow_x[1] + arrowhead_length * np.cos(data_df['theta_coords'][i] + arrowhead_angle)
+		head_y1 = arrow_y[1] + arrowhead_length * np.sin(data_df['theta_coords'][i] + arrowhead_angle)
+
+		head_x2 = arrow_x[1] + arrowhead_length * np.cos(data_df['theta_coords'][i] - arrowhead_angle)
+		head_y2 = arrow_y[1] + arrowhead_length * np.sin(data_df['theta_coords'][i] - arrowhead_angle)
+
+		# 绘制箭头尖端
+		fig.add_trace(go.Scatter(
+			x=[arrow_x[1], head_x1, head_x2],
+			y=[arrow_y[1], head_y1, head_y2],
+			mode='lines',
+			line=dict(color='red', width=4),
+			showlegend=False
+		))
+
 	fig.update_xaxes(scaleanchor="y", scaleratio=1)
 	fig.update_yaxes(scaleanchor="x", scaleratio=1)
-	fig.update_layout(xaxis_title='X (m)', yaxis_title='Y (m)', autosize=True)
+	fig.update_layout(
+		xaxis_title='X (m)',
+		yaxis_title='Y (m)',
+		autosize=True,
+		width=800,  # 设置宽度
+		height=600,  # 设置高度
+	)
 
 
 # 绘制3D视图
 def plot_3d():
+	# 绘制参考轨迹 3D（使用不同的颜色和透明度）
 	fig.add_trace(
 		go.Scatter3d(x=data_df['x_ref'], y=data_df['y_ref'], z=data_df.index, mode='lines+markers', name='Reference 3D',
-		             marker=dict(color='blue', opacity=1.0)))
-	fig.add_trace(go.Scatter3d(x=data_df['x_coords'], y=data_df['y_coords'], z=data_df.index, mode='lines+markers',
-	                           name='Optimized 3D', marker=dict(color='red', opacity=1.0)))
-	fig.add_trace(go.Scatter3d(x=data_df['x_ref'], y=data_df['y_ref'], z=[0] * len(data_df), mode='lines+markers',
-	                           name='Reference 2D', marker=dict(color='blue', opacity=0.5)))
-	fig.add_trace(go.Scatter3d(x=data_df['x_coords'], y=data_df['y_coords'], z=[0] * len(data_df), mode='lines+markers',
-	                           name='Optimized 2D', marker=dict(color='red', opacity=0.5)))
-	for i in range(len(data_df)):
-		corners_x, corners_y = get_vehicle_corners(data_df['x_coords'][i], data_df['y_coords'][i], data_df['theta'][i])
-		fig.add_trace(
-			go.Scatter3d(x=corners_x, y=corners_y, z=[0] * 5, mode='lines', line=dict(color='black'), showlegend=False))
-	fig.update_layout(width=960, height=960,
-	                  scene=dict(xaxis=dict(title='X (m)'), yaxis=dict(title='Y (m)'), zaxis=dict(title='Index')))
+		             marker=dict(color='deepskyblue', size=5, opacity=1.0, line=dict(color='black', width=0.5)))
+	)
+
+	# 绘制优化轨迹 3D
+	fig.add_trace(
+		go.Scatter3d(x=data_df['x_coords'], y=data_df['y_coords'], z=data_df.index, mode='lines+markers',
+		             name='Optimized 3D',
+		             marker=dict(color='tomato', size=5, opacity=1.0, line=dict(color='black', width=0.5)))
+	)
+
+	# 绘制动态轨迹 3D
+	# fig.add_trace(
+	# 	go.Scatter3d(x=data_df['dynamic_traj_x'], y=data_df['dynamic_traj_y'], z=data_df.index, mode='lines+markers',
+	# 	             name='Dynamic Trajectory 3D',
+	# 	             marker=dict(color='orange', size=5, opacity=0.5, line=dict(color='black', width=0.5)))
+	# )
+
+	# # 绘制参考轨迹 2D（使用透明度以区分）
+	# fig.add_trace(
+	# 	go.Scatter3d(x=data_df['x_ref'], y=data_df['y_ref'], z=[0] * len(data_df), mode='lines+markers',
+	# 	             name='Reference 2D', marker=dict(color='deepskyblue', opacity=0.5, size=5))
+	# )
+	#
+	# # 绘制优化轨迹 2D
+	# fig.add_trace(
+	# 	go.Scatter3d(x=data_df['x_coords'], y=data_df['y_coords'], z=[0] * len(data_df), mode='lines+markers',
+	# 	             name='Optimized 2D', marker=dict(color='tomato', opacity=0.5, size=5))
+	# )
+	#
+	# # 绘制动态轨迹 2D
+	# fig.add_trace(
+	# 	go.Scatter3d(x=data_df['dynamic_traj_x'], y=data_df['dynamic_traj_y'], z=[0] * len(data_df),
+	# 	             mode='lines+markers',
+	# 	             name='Dynamic Trajectory 2D', marker=dict(color='orange', opacity=0.5, size=5))
+	# )
+	#
+	# 绘制车辆轮廓，减少重复渲染，提高性能
+	# for i in range(0, len(data_df), max(1, len(data_df) // 50)):  # 只绘制每50个数据点的车辆轮廓，避免重复渲染
+	# 	corners_x, corners_y = get_vehicle_corners(data_df['x_coords'][i], data_df['y_coords'][i],
+	# 	                                           data_df['theta_coords'][i])
+	# 	fig.add_trace(
+	# 		go.Scatter3d(x=corners_x, y=corners_y, z=[0] * 5, mode='lines', line=dict(color='darkgrey', width=2),
+	# 		             showlegend=False)
+	# 	)
+
+	# 更新布局，设置图表尺寸、背景颜色、交互体验和轴标签
+	fig.update_layout(
+		width=1400,  # 增加图表宽度
+		height=1000,  # 增加图表高度
+		title='3D Trajectory Visualization',
+		title_x=0.5,  # 居中标题
+		# scene=dict(
+		# 	xaxis=dict(
+		# 		title='X (m)',
+		# 		backgroundcolor='rgba(0, 0, 0, 0.1)',
+		# 		gridcolor='white',
+		# 		range=[min(data_df['x_coords']) - 20, max(data_df['x_coords']) + 20]  # 设置x轴范围
+		# 	),
+		# 	yaxis=dict(
+		# 		title='Y (m)',
+		# 		backgroundcolor='rgba(0, 0, 0, 0.1)',
+		# 		gridcolor='white',
+		# 		range=[min(data_df['y_coords']) - 20, max(data_df['y_coords']) + 20]  # 设置y轴范围
+		# 	),
+		# 	zaxis=dict(
+		# 		title='Index',
+		# 		backgroundcolor='rgba(0, 0, 0, 0.1)',
+		# 		gridcolor='white',
+		# 		range=[0, len(data_df) + 20]  # 设置z轴范围，使得轨迹不占据整个空间
+		# 	),
+		# 	aspectmode='cube',  # 设置x、y、z轴比例一致
+		# ),
+		scene_camera=dict(
+			eye=dict(x=1.5, y=1.5, z=1.5)  # 改变视角，使得初始视角适应数据
+		),
+		margin=dict(l=0, r=0, b=0, t=50)  # 调整图表边距
+	)
 
 
 if view == '2D':
@@ -139,29 +269,68 @@ else:
 
 st.plotly_chart(fig)
 
-# 统一显示状态和控制信息
+# # # 统一显示状态和控制信息
 st.title('State and Control Information')
-fig = make_subplots(rows=3, cols=2, shared_xaxes=False,
-                    subplot_titles=('velocity', 'acc', 'theta', 'steering', 'd(aa)_jerk', 'dd(steering)_alpha'))
+fig = make_subplots(
+	rows=4, cols=2, shared_xaxes=False,
+	subplot_titles=(
+		'velocity', 'theta', 'steering', 'd(steering)_omega',
+		'odom', 'accel', 'd(a)_jerk', 'dd(steering)_alpha'
+	),
+	vertical_spacing=0.1,  # 设置垂直间距
+	horizontal_spacing=0.1  # 设置水平间距
+)
+#
+# # # 添加数据
+fig.add_trace(go.Scatter(y=data_df['v_coords'], mode='lines+markers', name='velocity', marker=dict(color='#1f77b4')),
+              row=1, col=1)  # 深蓝色
+fig.add_trace(go.Scatter(y=data_df['theta_coords'], mode='lines+markers', name='theta', marker=dict(color='#ff7f0e')),
+              row=1, col=2)  # 橙色
 fig.add_trace(
-	go.Scatter(y=data_df['velocity'], mode='lines+markers', name='velocity', marker=dict(color='red')), row=1,
-	col=1)
+	go.Scatter(y=data_df['steering_coords'], mode='lines+markers', name='steering', marker=dict(color='#2ca02c')),
+	row=2, col=1)  # 绿色
 fig.add_trace(
-	go.Scatter(y=data_df['acc'], mode='lines+markers', name='acc', marker=dict(color='blue')),
-	row=1, col=2)
-fig.add_trace(go.Scatter(y=data_df['theta'], mode='lines+markers', name='theta', marker=dict(color='green')),
-              row=2, col=1)
-fig.add_trace(go.Scatter(y=data_df['steering'], mode='lines+markers', name='steering', marker=dict(color='magenta')),
-              row=2,
-              col=2)
-fig.add_trace(go.Scatter(y=data_df['d(aa)_jerk'], mode='lines+markers', name='d(aa)_jerk', marker=dict(color='purple')),
-              row=3, col=1)
-fig.add_trace(go.Scatter(y=data_df['dd(steering)_alpha'], mode='lines+markers', name='dd(steering)_alpha',
-                         marker=dict(color='orange')), row=3,
-              col=2)
-fig.update_layout(autosize=True)
-st.plotly_chart(fig)
+	go.Scatter(y=data_df['omega_coords'], mode='lines+markers', name='d(steering)_omega', marker=dict(color='#d62728')),
+	row=2, col=2)  # 红色
+fig.add_trace(go.Scatter(y=data_df['odom_coords'], mode='lines+markers', name='odom', marker=dict(color='#9467bd')),
+              row=3, col=1)  # 紫色
+fig.add_trace(go.Scatter(y=data_df['acc_coords'], mode='lines+markers', name='accel', marker=dict(color='#8c564b')),
+              row=3, col=2)  # 棕色
+fig.add_trace(
+	go.Scatter(y=data_df['jerk_values'], mode='lines+markers', name='d(a)_jerk', marker=dict(color='#e377c2')), row=4,
+	col=1)  # 粉红色
+fig.add_trace(go.Scatter(y=data_df['alpha_values'], mode='lines+markers', name='dd(steering)_alpha',
+                         marker=dict(color='#7f7f7f')), row=4, col=2)  # 灰色
 
+# # 更新布局设置
+fig.update_layout(
+	# autosize=True,
+	font=dict(color='white'),  # 设置字体颜色为白色
+	height=1000,  # 增加图表高度
+	width=1000,  # 增加图表宽度
+
+	# 统一设置所有子图的网格线
+	xaxis=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	yaxis=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	xaxis2=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	yaxis2=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	xaxis3=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	yaxis3=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	xaxis4=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	yaxis4=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	xaxis5=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	yaxis5=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	xaxis6=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	yaxis6=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	xaxis7=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	yaxis7=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	xaxis8=dict(showgrid=True, gridcolor='gray', zeroline=False),
+	yaxis8=dict(showgrid=True, gridcolor='gray', zeroline=False)
+)
+
+# # 显示图表
+st.plotly_chart(fig)
+#
 # 可视化调试信息
 st.title('Debug Information')
 fig = make_subplots(rows=3, cols=1, shared_xaxes=False,
