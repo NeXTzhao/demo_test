@@ -40,25 +40,25 @@ def get_vehicle_corners(x, y, theta):
 		y + (vehicle_length / 2) * np.sin(theta) + (vehicle_width / 2) * np.cos(theta)
 	]
 	return corners_x, corners_y
-
-# 绘制车辆方向
-def plot_vehicle_direction(x, y, theta):
-	# 箭头的长度和方向
-	arrow_length = 0.6  # 箭头长度
-	arrow_x = [x, x + arrow_length * np.cos(theta)]
-	arrow_y = [y, y + arrow_length * np.sin(theta)]
-
-	# 箭头的尖端
-	arrowhead_x = x + arrow_length * np.cos(theta) * 0.8
-	arrowhead_y = y + arrow_length * np.sin(theta) * 0.8
-
-	# 创建箭头的两条边，构成箭头尖
-	arrowhead_x2 = arrowhead_x + 0.1 * np.cos(theta + np.pi / 4)
-	arrowhead_y2 = arrowhead_y + 0.1 * np.sin(theta + np.pi / 4)
-	arrowhead_x3 = arrowhead_x + 0.1 * np.cos(theta - np.pi / 4)
-	arrowhead_y3 = arrowhead_y + 0.1 * np.sin(theta - np.pi / 4)
-
-	return arrow_x, arrow_y, [arrowhead_x, arrowhead_y, arrowhead_x2, arrowhead_y2, arrowhead_x3, arrowhead_y3]
+#
+# # 绘制车辆方向
+# def plot_vehicle_direction(x, y, theta):
+# 	# 箭头的长度和方向
+# 	arrow_length = 0.6  # 箭头长度
+# 	arrow_x = [x, x + arrow_length * np.cos(theta)]
+# 	arrow_y = [y, y + arrow_length * np.sin(theta)]
+#
+# 	# 箭头的尖端
+# 	arrowhead_x = x + arrow_length * np.cos(theta) * 0.8
+# 	arrowhead_y = y + arrow_length * np.sin(theta) * 0.8
+#
+# 	# 创建箭头的两条边，构成箭头尖
+# 	arrowhead_x2 = arrowhead_x + 0.1 * np.cos(theta + np.pi / 4)
+# 	arrowhead_y2 = arrowhead_y + 0.1 * np.sin(theta + np.pi / 4)
+# 	arrowhead_x3 = arrowhead_x + 0.1 * np.cos(theta - np.pi / 4)
+# 	arrowhead_y3 = arrowhead_y + 0.1 * np.sin(theta - np.pi / 4)
+#
+# 	return arrow_x, arrow_y, [arrowhead_x, arrowhead_y, arrowhead_x2, arrowhead_y2, arrowhead_x3, arrowhead_y3]
 
 
 # 绘制2D视图
@@ -120,62 +120,62 @@ def plot_2d():
 		hoverinfo='text'  # 只显示文本（索引、速度、theta等）
 	))
 
-
-	for i in range(len(data_df)):
-		# 获取车辆四角坐标
-		corners_x, corners_y = get_vehicle_corners(data_df['x_coords'][i], data_df['y_coords'][i], data_df['theta_coords'][i])
-		# 绘制车辆
-		fig.add_trace(go.Scatter(
-			x=corners_x,
-			y=corners_y,
-			mode='lines',
-			line=dict(color='rgba(200, 200, 200, 0.8)', width=1.5),  # 浅灰色，带透明度
-			showlegend=False
-		))
-
-		# 车辆方向箭头
-		arrow_length = 0.6  # 箭头长度
-		arrow_x = [data_df['x_coords'][i], data_df['x_coords'][i] + arrow_length * np.cos(data_df['theta_coords'][i])]
-		arrow_y = [data_df['y_coords'][i], data_df['y_coords'][i] + arrow_length * np.sin(data_df['theta_coords'][i])]
-
-		# 绘制箭头线
-		fig.add_trace(go.Scatter(
-			x=arrow_x,
-			y=arrow_y,
-			mode='lines',
-			line=dict(color='red', width=4, dash='solid'),  # 红色箭头，宽度稍微加粗，实线
-			showlegend=False
-		))
-
-		# 绘制箭头的尖端
-		arrowhead_length = 0.2  # 尖端长度
-		arrowhead_angle = np.pi / 6  # 尖端角度
-
-		# 箭头尖端两个点
-		head_x1 = arrow_x[1] + arrowhead_length * np.cos(data_df['theta_coords'][i] + arrowhead_angle)
-		head_y1 = arrow_y[1] + arrowhead_length * np.sin(data_df['theta_coords'][i] + arrowhead_angle)
-
-		head_x2 = arrow_x[1] + arrowhead_length * np.cos(data_df['theta_coords'][i] - arrowhead_angle)
-		head_y2 = arrow_y[1] + arrowhead_length * np.sin(data_df['theta_coords'][i] - arrowhead_angle)
-
-		# 绘制箭头尖端
-		fig.add_trace(go.Scatter(
-			x=[arrow_x[1], head_x1, head_x2],
-			y=[arrow_y[1], head_y1, head_y2],
-			mode='lines',
-			line=dict(color='red', width=4),
-			showlegend=False
-		))
-
-	fig.update_xaxes(scaleanchor="y", scaleratio=1)
-	fig.update_yaxes(scaleanchor="x", scaleratio=1)
-	fig.update_layout(
-		xaxis_title='X (m)',
-		yaxis_title='Y (m)',
-		autosize=True,
-		width=800,  # 设置宽度
-		height=600,  # 设置高度
-	)
+	#
+	# for i in range(len(data_df)):
+	# 	# 获取车辆四角坐标
+	# 	corners_x, corners_y = get_vehicle_corners(data_df['x_coords'][i], data_df['y_coords'][i], data_df['theta_coords'][i])
+	# 	# 绘制车辆
+	# 	fig.add_trace(go.Scatter(
+	# 		x=corners_x,
+	# 		y=corners_y,
+	# 		mode='lines',
+	# 		line=dict(color='rgba(200, 200, 200, 0.8)', width=1.5),  # 浅灰色，带透明度
+	# 		showlegend=False
+	# 	))
+	#
+	# 	# 车辆方向箭头
+	# 	arrow_length = 0.6  # 箭头长度
+	# 	arrow_x = [data_df['x_coords'][i], data_df['x_coords'][i] + arrow_length * np.cos(data_df['theta_coords'][i])]
+	# 	arrow_y = [data_df['y_coords'][i], data_df['y_coords'][i] + arrow_length * np.sin(data_df['theta_coords'][i])]
+	#
+	# 	# 绘制箭头线
+	# 	fig.add_trace(go.Scatter(
+	# 		x=arrow_x,
+	# 		y=arrow_y,
+	# 		mode='lines',
+	# 		line=dict(color='red', width=4, dash='solid'),  # 红色箭头，宽度稍微加粗，实线
+	# 		showlegend=False
+	# 	))
+	#
+	# 	# 绘制箭头的尖端
+	# 	arrowhead_length = 0.2  # 尖端长度
+	# 	arrowhead_angle = np.pi / 6  # 尖端角度
+	#
+	# 	# 箭头尖端两个点
+	# 	head_x1 = arrow_x[1] + arrowhead_length * np.cos(data_df['theta_coords'][i] + arrowhead_angle)
+	# 	head_y1 = arrow_y[1] + arrowhead_length * np.sin(data_df['theta_coords'][i] + arrowhead_angle)
+	#
+	# 	head_x2 = arrow_x[1] + arrowhead_length * np.cos(data_df['theta_coords'][i] - arrowhead_angle)
+	# 	head_y2 = arrow_y[1] + arrowhead_length * np.sin(data_df['theta_coords'][i] - arrowhead_angle)
+	#
+	# 	# 绘制箭头尖端
+	# 	fig.add_trace(go.Scatter(
+	# 		x=[arrow_x[1], head_x1, head_x2],
+	# 		y=[arrow_y[1], head_y1, head_y2],
+	# 		mode='lines',
+	# 		line=dict(color='red', width=4),
+	# 		showlegend=False
+	# 	))
+	#
+	# fig.update_xaxes(scaleanchor="y", scaleratio=1)
+	# fig.update_yaxes(scaleanchor="x", scaleratio=1)
+	# fig.update_layout(
+	# 	xaxis_title='X (m)',
+	# 	yaxis_title='Y (m)',
+	# 	autosize=True,
+	# 	width=800,  # 设置宽度
+	# 	height=600,  # 设置高度
+	# )
 
 
 # 绘制3D视图
@@ -299,8 +299,8 @@ fig.add_trace(go.Scatter(y=data_df['acc_coords'], mode='lines+markers', name='ac
 fig.add_trace(
 	go.Scatter(y=data_df['jerk_values'], mode='lines+markers', name='d(a)_jerk', marker=dict(color='#e377c2')), row=4,
 	col=1)  # 粉红色
-fig.add_trace(go.Scatter(y=data_df['alpha_values'], mode='lines+markers', name='dd(steering)_alpha',
-                         marker=dict(color='#7f7f7f')), row=4, col=2)  # 灰色
+# fig.add_trace(go.Scatter(y=data_df['alpha_values'], mode='lines+markers', name='dd(steering)_alpha',
+#                          marker=dict(color='#7f7f7f')), row=4, col=2)  # 灰色
 
 # # 更新布局设置
 fig.update_layout(

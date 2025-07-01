@@ -63,6 +63,7 @@ void update_slack(TinySolver *solver)
     */
 void update_dual(TinySolver *solver)
 {
+    // TODO:: 要注意  这里的公式跟论文 不一样， y对应 u, g对应 x
     solver->work->y = solver->work->y + solver->work->u - solver->work->znew;
     solver->work->g = solver->work->g + solver->work->x - solver->work->vnew;
 }

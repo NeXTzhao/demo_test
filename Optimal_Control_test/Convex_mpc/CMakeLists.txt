@@ -23,7 +23,9 @@ find_package(nlohmann_json 3.11.2 REQUIRED)
 find_package(spdlog 1.12.0 REQUIRED)
 find_package(proxsuite REQUIRED)
 
-add_executable(convex_mpc convex_mpc.cpp)
+add_executable(convex_mpc convex_mpc.cpp
+        bp_path_tracking/longitudinal_model.hpp
+        bp_path_tracking/lateral_model.hpp)
 target_link_libraries(convex_mpc
         proxsuite::proxsuite
         Python3::Python
@@ -50,6 +52,13 @@ target_link_libraries(tinympc_spares
 
 add_executable(tinympc_bicycle  tinympc_bicycle_spares.cpp ${TINYMPC_SOURCES})
 target_link_libraries(tinympc_bicycle
+        Python3::Python
+        Python3::NumPy
+        nlohmann_json::nlohmann_json
+)
+
+add_executable(tinympc_spares_lat_lon  tinympc_spares_lat_lon.cpp ${TINYMPC_SOURCES})
+target_link_libraries(tinympc_spares_lat_lon
         Python3::Python
         Python3::NumPy
         nlohmann_json::nlohmann_json

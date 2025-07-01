@@ -8,7 +8,7 @@
 #include "common/log.h"
 #include "nlohmann/json.hpp"
 #include "third_party/tinympc/tiny_api.hpp"
-#define NHORIZON 35
+#define NHORIZON 3
 
 using json = nlohmann::json;
 
@@ -118,7 +118,7 @@ class Vehicle {
   }
 
   State EvalOneStep(const State& x, const Control& u, double increment,
-                    int USE_RK = 2) const {
+                    int USE_RK = 4) const {
     const State& limited_x = x;
     const Control& limited_u = u;
     State next_state;
@@ -316,14 +316,6 @@ class Vehicle {
   }
 
   double normalize(double value, double c = 1.0) {
-    /*1*/
-    // 避免对数0的问题
-    //    if (value <= 0) {
-    //      return 1.0;  // 对数的最小值，可以根据需要调整
-    //    }
-    //    return std::log(value + c);
-
-    /*2*/
     return value > 0 ? 1.0 / value : 1.0;
   }
 
@@ -351,6 +343,7 @@ class MPC {
         Q_N_(Q_N),
         solver_(nullptr) {}
 
+
   void solve(const State& initial_state,
              const std::vector<State>& reference_trajectory) {
     state_.clear();
@@ -360,6 +353,8 @@ class MPC {
 
     // 线性化系统
     vehicle_.linearize(initial_state, dt_, A_, B_);
+    AINFO << "A: \n" << A_;
+    AINFO << "B: \n" << B_;
     tinytype rho_value = 1;
     tinytype verbose = 0;
     int status =
@@ -369,9 +364,9 @@ class MPC {
       std::cout << "TinyMPC setup failed." << std::endl;
     }
 
-    solver_->settings->max_iter = 5;
-    solver_->settings->abs_pri_tol = 1;
-    solver_->settings->abs_dua_tol = 1;
+    solver_->settings->max_iter = 50;
+    solver_->settings->abs_pri_tol = 0.01;
+    solver_->settings->abs_dua_tol = 0.01;
     solver_->settings->check_termination = 1;
 
     const int point_num = reference_trajectory.size();
@@ -379,34 +374,80 @@ class MPC {
     for (int i = 0; i < point_num; ++i) {
       Xref_total.col(i) = reference_trajectory[i];
     }
+    // AINFO << "Xref_total: \n" << Xref_total;
 
     State x0 = initial_state;
     // state_.push_back(x0);
 
     TinyWorkspace* work = solver_->work;
+    int total_iterations = 0;
 
-    for (int k = 0; k < point_num; ++k) {
-      // 更新参考轨迹
-      int rem = std::min(horizon_, point_num - k);
-      work->Xref.leftCols(rem) = Xref_total.block(0, k, StateDim, rem);
-      if (rem < horizon_) {
-        work->Xref.rightCols(horizon_ - rem) =
-            Xref_total.col(point_num - 1).replicate(1, horizon_ - rem);
-      }
+    tinytype total_tracking_error = 0;
+
+    for (int k = 0; k < point_num - NHORIZON; ++k) {
+      solver_->work->Xref = Xref_total.middleCols(k, NHORIZON);
+
       tiny_set_x0(solver_, x0);
       tiny_solve(solver_);
 
+
+
       const auto& x_step = work->x.col(0);
-      const auto& u_step = work->u.col(0);
+      const auto& x_seq = work->x;
+
+      auto u_step = work->u.col(0);
+      auto u_seq = work->u;
 
       x0 = vehicle_.EvalOneStep(x0, u_step, dt_);
-
       state_.push_back(x_step);
-      if (k < point_num - 1) {
-        control_.push_back(u_step);
-      }
+      control_.push_back(u_step);
+
+      total_iterations += solver_->solution->iter;
+      printf("\n Iterations for step %2d: %d (cumulative: %d)\n", k,
+             solver_->solution->iter, total_iterations);
     }
-    AINFO << "X size: " << state_.size() << "u size: " << control_.size();
+
+    // === 主循环之后，处理尾部 NHORIZON 个点 ===
+    for (int tail_k = point_num - NHORIZON; tail_k < point_num; ++tail_k) {
+      int horizon_steps = std::min(NHORIZON, point_num - tail_k);
+      if (horizon_steps <= 1) {
+        // 最后一步：直接模拟，无控制量
+        state_.push_back(x0);
+        continue;
+      }
+
+      SetBoundConstraints(x_min_, x_max_, u_min_, u_max_, horizon_steps);
+
+      int status =
+          tiny_setup(&solver_, A_, B_, Q_, R_, rho_value, StateDim, ControlDim,
+                     horizon_steps, x_min_, x_max_, u_min_, u_max_, verbose);
+      solver_->work->Xref = Xref_total.middleCols(tail_k, horizon_steps);
+
+      tiny_set_x0(solver_, x0);
+
+      // 求解
+      tiny_solve(solver_);
+      auto x_step = solver_->work->x.col(0);
+      auto u_step = solver_->work->u.col(0);
+
+      // 模拟并记录
+      state_.push_back(x_step);
+      control_.push_back(u_step);
+      x0 = vehicle_.EvalOneStep(x_step, u_step, dt_);
+    }
+
+    printf("\nTotal iterations across all MPC solves: %d\n", total_iterations);
+    printf("Average tracking error: %.4f\n",
+           total_tracking_error / solver_->settings->max_iter);
+    std::cout << "x size:" << state_.size() << ", u size:" << control_.size()
+              << std::endl;
+
+    // for (const auto& state : state_) {
+    //   AINFO << "state: \n" << state;
+    // }
+    // for (const auto& control : control_) {
+    //   AINFO << "control: \n" << control;
+    // }
   }
 
   const std::vector<State>& getState() const { return state_; }
@@ -416,18 +457,29 @@ class MPC {
   void SetBoundConstraints(Eigen::MatrixXd& x_min, Eigen::MatrixXd& x_max,
                            Eigen::MatrixXd& u_min, Eigen::MatrixXd& u_max,
                            int horizon_size) {
+    x_min.setZero();
+    x_max.setZero();
+    u_min.setZero();
+    u_max.setZero();
     Eigen::VectorXd state_min(StateDim), state_max(StateDim);
     Eigen::VectorXd control_min(ControlDim), control_max(ControlDim);
 
     const double inf = 1e12;
 
-    state_min << -inf, -inf, vehicle_.min_speed, -inf, vehicle_.min_delta, -inf,
-        -inf, vehicle_.min_a;
-    state_max << inf, inf, vehicle_.max_speed, inf, vehicle_.max_delta, inf,
-        inf, vehicle_.max_a;
+    // state_min << -inf, -inf, vehicle_.min_speed, -inf, vehicle_.min_delta,
+    // -inf,
+    //     -inf, vehicle_.min_a;
+    // state_max << inf, inf, vehicle_.max_speed, inf, vehicle_.max_delta, inf,
+    //     inf, vehicle_.max_a;
 
-    control_min << vehicle_.min_jerk, vehicle_.min_alpha;
-    control_max << vehicle_.max_jerk, vehicle_.max_alpha;
+    state_min << -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf;
+    state_max << inf, inf, inf, inf, inf, inf, inf, inf;
+
+    // control_min << vehicle_.min_jerk, vehicle_.min_alpha;
+    // control_max << vehicle_.max_jerk, vehicle_.max_alpha;
+
+    control_min << -inf, -inf;
+    control_max << inf, inf;
 
     x_min = state_min.replicate(1, horizon_size);
     x_max = state_max.replicate(1, horizon_size);
@@ -448,167 +500,6 @@ class MPC {
   Eigen::MatrixXd A_, B_;
   Eigen::MatrixXd x_min_, x_max_, u_min_, u_max_;
 };
-
-// template <int StateDim, int ControlDim>
-// class MPC {
-//  public:
-//   using State = typename Vehicle<StateDim, ControlDim>::State;
-//   using Control = typename Vehicle<StateDim, ControlDim>::Control;
-//
-//   MPC(Vehicle<StateDim, ControlDim>& vehicle, int horizon, double dt,
-//       Eigen::MatrixXd Q, Eigen::MatrixXd R, Eigen::MatrixXd Q_N)
-//       : vehicle_(vehicle),
-//         horizon_(horizon),
-//         dt_(dt),
-//         Q_(std::move(Q)),
-//         R_(std::move(R)),
-//         Q_N_(std::move(Q_N)) {}
-//
-//   void solve(const State& initial_state,
-//              const std::vector<State>& reference_trajectory) {
-//     state_.clear();
-//     control_.clear();
-//
-//     TinySolver* solver;
-//
-//     Eigen::MatrixXd A_t(StateDim, StateDim);
-//     Eigen::MatrixXd B_t(StateDim, ControlDim);
-//     vehicle_.linearize(initial_state, dt_, A_t, B_t);
-//
-//     // 权重归一化
-//     //    vehicle_.calculateWeightRange(initial_state, dt_, NHORIZON, Q_,
-//     R_);
-//
-//     Eigen::MatrixXd x_min, x_max, u_min, u_max;
-//     SetBoundConstraints(x_min, x_max, u_min, u_max, NHORIZON);
-//
-//     tinytype rho_value = 1;
-//     tinytype verbose = 1;
-//
-//     int status =
-//         tiny_setup(&solver, A_t, B_t, Q_, R_, rho_value, StateDim,
-//         ControlDim,
-//                    NHORIZON, x_min, x_max, u_min, u_max, verbose);
-//
-//     // Update whichever settings we'd like
-//     solver->settings->max_iter = 100;
-//
-//     // Alias solver->work for brevity
-//     TinyWorkspace* work = solver->work;
-//
-//     // reference trajectory
-//     int point_num = reference_trajectory.size();
-//     int state_num = reference_trajectory[0].size();
-//     Eigen::MatrixXd Xref_total(state_num, point_num);
-//
-//     for (size_t i = 0; i < point_num; ++i) {
-//       //      std::cout << "ref traj " << i << ": "
-//       //                << reference_trajectory[i].transpose() << std::endl;
-//       Xref_total.col(i) = reference_trajectory[i];
-//     }
-//
-//     // 将 reference_matrix 中的数据映射到 work->Xref
-//     work->Xref = Xref_total.block(0, 0, StateDim, NHORIZON);
-//     //    std::cout << "Xref_total: \n" << work->Xref << std::endl;
-//
-//     State x0;
-//     x0 = work->Xref.col(0);
-//     state_.push_back(x0);
-//
-//     for (int k = 0; k < point_num; ++k) {
-//       // 1. 更新测量值
-//       tiny_set_x0(solver, x0);
-//
-//       // 2. 更新参考轨迹
-//       if (k + NHORIZON <= point_num) {
-//         work->Xref = Xref_total.block(0, k, StateDim, NHORIZON);
-//       } else {
-//         int remaining = point_num - k;
-//         work->Xref.leftCols(remaining) =
-//             Xref_total.block(0, k, StateDim, remaining);
-//         work->Xref.rightCols(NHORIZON - remaining) =
-//             Xref_total.col(point_num - 1).replicate(1, NHORIZON - remaining);
-//       }
-//
-//       // 3. 重置对偶变量
-//       work->y = Eigen::Matrix<tinytype, ControlDim, NHORIZON - 1>::Zero();
-//       work->g = Eigen::Matrix<tinytype, StateDim, NHORIZON>::Zero();
-//
-//       // 4. 解决MPC问题
-//       tiny_solve(solver);
-//       auto x_step = work->x.col(0);
-//       auto u_step = work->u.col(0);
-//
-//       // 5. 向前模拟
-//
-//       x0 = work->Adyn * x0 + work->Bdyn * u_step;
-//       //      std::cout << "x sim " << k << ": \n" << x0.transpose() <<
-//       //      std::endl;
-//       state_.push_back(x_step);
-//       control_.push_back(u_step);
-//       //      std::cout << "x_opt " << k << ": \n" << work->x << std::endl;
-//     }
-//   }
-//
-//   void SetBoundConstraints(Eigen::MatrixXd& x_min, Eigen::MatrixXd& x_max,
-//                            Eigen::MatrixXd& u_min, Eigen::MatrixXd& u_max,
-//                            int horizon_size) {
-//     Eigen::VectorXd state_min(StateDim), state_max(StateDim);
-//     Eigen::VectorXd control_min(ControlDim), control_max(ControlDim);
-//
-//     double min_a = vehicle_.min_a;
-//     double max_a = vehicle_.max_a;
-//     double min_delta = vehicle_.min_delta;
-//     double max_delta = vehicle_.max_delta;
-//     double min_v = vehicle_.min_speed;
-//     double max_v = vehicle_.max_speed;
-//
-//     double max_alpha = vehicle_.max_alpha;
-//     double min_alpha = vehicle_.min_alpha;
-//     double max_jerk = vehicle_.max_jerk;
-//     double min_jerk = vehicle_.min_jerk;
-//
-//     double inf = 1e12;
-//
-//     // state bounds
-//     state_min << -inf, -inf, min_v, -inf, min_delta, -inf, -inf, min_a;
-//     state_max << inf, inf, max_v, inf, max_delta, inf, inf, max_a;
-//
-//     //    state_min << -inf, -inf, -inf, -inf, -inf, -inf, -inf, -inf;
-//     //    state_max << inf, inf, inf, inf, inf, inf, inf, inf;
-//
-//     // control bounds
-//     control_min << min_jerk, min_alpha;
-//     control_max << max_jerk, max_alpha;
-//
-//     // 将边界扩展到整个预测窗口
-//     x_min = state_min.replicate(1, horizon_size);
-//     x_max = state_max.replicate(1, horizon_size);
-//     u_min = control_min.replicate(1, horizon_size - 1);
-//     u_max = control_max.replicate(1, horizon_size - 1);
-//
-//     //    AINFO << "State bounds (x_min): \n" << x_min;
-//     //    AINFO << "State bounds (x_max): \n" << x_max;
-//     //    AINFO << "Control bounds (u_min): \n" << u_min;
-//     //    AINFO << "Control bounds (u_max): \n" << u_max << '\n';
-//   }
-//
-//   vector<State> getState() { return state_; }
-//   std::vector<Control>& getControl() { return control_; }
-//
-//  public:
-//   Eigen::MatrixXd Q_;
-//   Eigen::MatrixXd R_;
-//
-//  private:
-//   Vehicle<StateDim, ControlDim>& vehicle_;
-//   int horizon_;
-//   double dt_;
-//   std::vector<State> state_;
-//   std::vector<Control> control_;
-//
-//   Eigen::MatrixXd Q_N_;
-// };
 
 // 定义计算误差的函数
 template <int StateDim, int ControlDim>
@@ -761,6 +652,7 @@ void loadTrajectoryFromCSV(
     ++i;  // 更新索引
   }
 }
+
 template <int StateDim, int ControlDim>
 void normalizeTrajectory(
     std::vector<typename Vehicle<StateDim, ControlDim>::State>& trajectory) {
@@ -775,42 +667,21 @@ void normalizeTrajectory(
 
   // 遍历轨迹，进行坐标变换和平移
   for (auto& point : trajectory) {
-    // 计算相对于起点的坐标差值
     double dx = point[Vehicle<StateDim, ControlDim>::X_POS] - x_start;
     double dy = point[Vehicle<StateDim, ControlDim>::Y_POS] - y_start;
 
-    // 更新坐标，执行旋转变换
+    // 坐标旋转
     point[Vehicle<StateDim, ControlDim>::X_POS] =
         dx * cos_theta_start + dy * sin_theta_start;
     point[Vehicle<StateDim, ControlDim>::Y_POS] =
         -dx * sin_theta_start + dy * cos_theta_start;
 
-    // 更新航向角
-    point[Vehicle<StateDim, ControlDim>::THETA] -= theta_start;
-
-    //    // 归一化航向角到[-π, π]范围
-    //    point[Vehicle<StateDim, ControlDim>::THETA] =
-    //        std::fmod(point[Vehicle<StateDim, ControlDim>::THETA] + M_PI, 2 *
-    //        M_PI);
-    //
-    //    // 如果theta大于π，则减去2π，确保在[-π, π]范围内
-    //    if (point[Vehicle<StateDim, ControlDim>::THETA] > M_PI) {
-    //      point[Vehicle<StateDim, ControlDim>::THETA] -= 2 * M_PI;
-    //    }
+    // 角度差并归一化到 [-pi, pi]
+    double dtheta = point[Vehicle<StateDim, ControlDim>::THETA] - theta_start;
+    while (dtheta > M_PI) dtheta -= 2.0 * M_PI;
+    while (dtheta < -M_PI) dtheta += 2.0 * M_PI;
+    point[Vehicle<StateDim, ControlDim>::THETA] = dtheta;
   }
-
-  //  for (const auto& point : trajectory) {
-  //    std::cout << "x: " << point(Vehicle<StateDim, ControlDim>::X_POS)
-  //              << " y: " << point(Vehicle<StateDim, ControlDim>::Y_POS)
-  //              << ", speed: " << point(Vehicle<StateDim, ControlDim>::SPEED)
-  //              << ", theta: " << point(Vehicle<StateDim, ControlDim>::THETA)
-  //              << ", deltav: " << point(Vehicle<StateDim,
-  //              ControlDim>::DELTAV)
-  //              << ", omega: " << point(Vehicle<StateDim, ControlDim>::OMEGA)
-  //              << ", odom: " << point(Vehicle<StateDim, ControlDim>::ODOM)
-  //              << ", accel: " << point(Vehicle<StateDim, ControlDim>::ACCEL)
-  //              << std::endl;
-  //  }
 }
 
 template <int StateDim, int ControlDim>
@@ -840,30 +711,7 @@ void undoRotation(
 
     // 恢复theta
     point[Vehicle<StateDim, ControlDim>::THETA] += theta_start;
-
-    //    // 归一化theta到[-π, π]范围
-    //    point[Vehicle<StateDim, ControlDim>::THETA] =
-    //        std::fmod(point[Vehicle<StateDim, ControlDim>::THETA] + M_PI, 2 *
-    //        M_PI);
-    //
-    //    if (point[Vehicle<StateDim, ControlDim>::THETA] > M_PI) {
-    //      point[Vehicle<StateDim, ControlDim>::THETA] -= 2 * M_PI;
-    //    }
   }
-
-  //  for (const auto& point : trajectory) {
-  //    std::cout << "x: " << point(Vehicle<StateDim, ControlDim>::X_POS)
-  //              << " y: " << point(Vehicle<StateDim, ControlDim>::Y_POS)
-  //              << ", speed: " << point(Vehicle<StateDim, ControlDim>::SPEED)
-  //              << ", theta: " << point(Vehicle<StateDim, ControlDim>::THETA)
-  //              << ", deltav: " << point(Vehicle<StateDim,
-  //              ControlDim>::DELTAV)
-  //              << ", omega: " << point(Vehicle<StateDim, ControlDim>::OMEGA)
-  //              << ", odom: " << point(Vehicle<StateDim, ControlDim>::ODOM)
-  //              << ", accel: " << point(Vehicle<StateDim, ControlDim>::ACCEL)
-  //              << std::endl;
-  //  }
-  //  std::cout << std::endl;
 }
 
 int main() {
@@ -904,7 +752,7 @@ int main() {
       max_steering_angle, min_steering_angle, max_alpha, min_alpha, max_jerk,
       min_jerk);
 
-  MPC<StateDim, ControlDim> mpc(vehicle, horizon, dt, Q, R, Q_N);
+  MPC<StateDim, ControlDim> mpc(vehicle, NHORIZON, dt, Q, R, Q_N);
 
   std::vector<Vehicle<StateDim, ControlDim>::State> targetTrajectory;
   targetTrajectory.resize(horizon);
@@ -925,17 +773,19 @@ int main() {
   auto end = std::chrono::high_resolution_clock::now();
 
   std::chrono::duration<double, std::milli> duration = end - start;
-  std::cout << std::fixed << std::setprecision(6)
-            << "All MPC solve time: " << duration.count() << " ms" << std::endl;
+  std::cout << "solve time: " << duration.count() << " ms" << std::endl;
+
   // 提取轨迹
   auto opt_trajectory = mpc.getState();
   auto control_inputs = mpc.getControl();
 
-  auto dyn_traj = vehicle.simulate(opt_trajectory.front(), control_inputs, dt);
-
+  auto dyn_traj = vehicle.simulate(start_point, control_inputs, dt);
+  // AINFO << "START ponit: " <<  start_point;
+  // AINFO << "opt_trajectory ponit: " <<  opt_trajectory.front();
   undoRotation<StateDim, ControlDim>(opt_trajectory, start_point);
-  undoRotation<StateDim, ControlDim>(targetTrajectory, start_point);
-  undoRotation<StateDim, ControlDim>(dyn_traj, start_point);
+  // undoRotation<StateDim, ControlDim>(targetTrajectory, start_point);
+  // undoRotation<StateDim, ControlDim>(dyn_traj, start_point);
+  // AINFO << "dyn_traj START ponit: " <<  dyn_traj.front();
 
   std::vector<double> x_ref, y_ref, x_coords, y_coords, v_coords, theta_coords,
       acc_coords, steering_coords, omega_coords, odom_coords;
