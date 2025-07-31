@@ -31,3 +31,10 @@ target_link_libraries(tinympc_spares
         Python3::NumPy
         nlohmann_json::nlohmann_json
 )
+
+add_executable(smooth smooth.cpp ${TINYMPC_SOURCES})
+target_link_libraries(smooth
+        Python3::Python
+        Python3::NumPy
+        nlohmann_json::nlohmann_json
+)

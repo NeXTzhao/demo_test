@@ -10,7 +10,7 @@
 #include "third_party/tinympc/tiny_api.hpp"
 #include "third_party/tinympc/types.hpp"
 
-#define NHORIZON 2
+#define NHORIZON 3
 
 using json = nlohmann::json;
 
@@ -432,7 +432,7 @@ class MPC {
 
     tinyVector fdny = tiny_VectorNx::Zero();
 
-    tinytype rho_value = 0.1;
+    tinytype rho_value = 0.5;
     tinytype verbose = 0;
     tinytype adaptive_rho_flag = 1;
     int status = tiny_setup(&solver_, A_, B_, fdny, Q_, R_, rho_value, StateDim,
@@ -442,12 +442,12 @@ class MPC {
         tiny_set_bound_constraints(solver_, x_min_, x_max_, u_min_, u_max_);
 
     // // 计算耗时 ms
-    // auto start = std::chrono::high_resolution_clock::now();
-    // tiny_compute_sensitivity_by_fd(solver_);
-    // auto end = std::chrono::high_resolution_clock::now();
-    // std::chrono::duration<double, std::milli> duration = end - start;
-    // std::cout << "tiny_compute_sensitivity_by_fd time: " << duration.count()
-    //           << " ms" << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
+    tiny_compute_sensitivity_by_fd(solver_);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> duration = end - start;
+    std::cout << "tiny_compute_sensitivity_by_fd time: " << duration.count()
+              << " ms" << std::endl;
 
     if (status != 0 || solver_ == nullptr) {
       std::cout << "TinyMPC setup failed." << std::endl;
