@@ -36,6 +36,9 @@ public:
   using State = Eigen::Matrix<double, StateDim, 1>;
   using Control = Eigen::Matrix<double, ControlDim, 1>;
 
+  using StateSequence = std::vector<State>;
+  using ControlSequence = std::vector<Control>;
+
 public:
   explicit VehicleModelDynamics(double dt);
 

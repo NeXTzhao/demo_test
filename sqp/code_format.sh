@@ -8,5 +8,5 @@ root_dir=$(cd $script_dir/..; pwd)
 
 cd $root_dir
 
-find mim_solvers -type f -regex '.*\.\(cpp\|hpp\|cc\|c\|h\)' -exec clang-format -style=file -i {} +
+find sqp -type f -regex '.*\.\(cpp\|hpp\|cc\|c\|h\)' -exec clang-format -style=file -i {} +
 # black --check .

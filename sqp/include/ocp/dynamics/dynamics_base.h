@@ -49,12 +49,17 @@ public:
                          const Eigen::Ref<const Eigen::VectorXd> &u,
                          Eigen::Ref<Eigen::MatrixXd> Fx,
                          Eigen::Ref<Eigen::MatrixXd> Fu) {
-    Fx = Derivative(std::bind(&DynamicsAbstract::ComputeFlowMap, this,
-                              std::placeholders::_1, u),
-                    x, eps);
-    Fu = Derivative(std::bind(&DynamicsAbstract::ComputeFlowMap, this, x,
-                              std::placeholders::_1),
-                    u, eps);
+    Fx = Derivative(
+        [this, &u](const Eigen::Ref<const Eigen::VectorXd> &x_in) {
+          return this->ComputeFlowMap(x_in, u);
+        },
+        x, eps);
+
+    Fu = Derivative(
+        [this, &x](const Eigen::Ref<const Eigen::VectorXd> &u_in) {
+          return this->ComputeFlowMap(x, u_in);
+        },
+        u, eps);
   }
 
   size_t state_size() const { return nx_; }

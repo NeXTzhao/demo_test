@@ -13,12 +13,12 @@ VehicleModelDynamics *VehicleModelDynamics::clone() const {
 Eigen::VectorXd
 VehicleModelDynamics::Dynamics(const Eigen::Ref<const Eigen::VectorXd> &x,
                                const Eigen::Ref<const Eigen::VectorXd> &u) {
-  assert(x.size() == StateIndex::X_DIM);
-  assert(u.size() == ControlIndex::U_DIM);
+  assert(x.size() == StateDim);
+  assert(u.size() == ControlDim);
 
   // x := [x, y, v, θ, κ, d(κ), odom, acc]^T
   // u := [jerk, dd(κ)]^T
-  Eigen::VectorXd x_dot(StateIndex::X_DIM);
+  Eigen::VectorXd x_dot(StateDim);
   x_dot << x(StateIndex::SPEED) * std::cos(x(StateIndex::THETA)), // NOLINT
       x(StateIndex::SPEED) * std::sin(x(StateIndex::THETA)),      // NOLINT
       x(StateIndex::ACCEL),                                       // NOLINT
@@ -34,8 +34,8 @@ VehicleModelDynamics::Dynamics(const Eigen::Ref<const Eigen::VectorXd> &x,
 Eigen::VectorXd VehicleModelDynamics::ComputeFlowMap(
     const Eigen::Ref<const Eigen::VectorXd> &x,
     const Eigen::Ref<const Eigen::VectorXd> &u) {
-  assert(x.size() == StateIndex::X_DIM);
-  assert(u.size() == ControlIndex::U_DIM);
+  assert(x.size() == StateDim);
+  assert(u.size() == ControlDim);
 
   std::function<Eigen::VectorXd(const Eigen::Ref<const Eigen::VectorXd> &,
                                 const Eigen::Ref<const Eigen::VectorXd> &)>
