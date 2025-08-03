@@ -1,16 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 project(mim_solvers VERSION 0.1.0 LANGUAGES CXX)
 
-# 统一 C++ 标准（推荐用 compile_features）
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 依赖
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 
 option(BUILD_DEMO "Build demo executable" ON)
 
-# 源文件（把缺失的几个子目录也加上）
 file(GLOB_RECURSE MIM_SOLVERS_SOURCES
         src/ocp/constraint/*.cc
         src/ocp/cost/*.cc

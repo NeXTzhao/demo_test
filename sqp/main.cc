@@ -1,4 +1,5 @@
 
+#include "solver_manger.h"
 #include <cstdlib>
 #include <iostream>
 
